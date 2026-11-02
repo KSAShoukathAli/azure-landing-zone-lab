@@ -1,4 +1,4 @@
-﻿# Azure Landing Zone Lab
+# Azure Landing Zone Lab
 
 Hands-on lab for building an Azure landing zone with Terraform, in a single subscription.
 Repo is the source of truth. Work is done with both ChatGPT and Claude; PROGRESS.md keeps them in sync.
@@ -18,9 +18,9 @@ Repo is the source of truth. Work is done with both ChatGPT and Claude; PROGRESS
 
 | Network | Address space | Resource group | Purpose |
 |---|---|---|---|
-| Hub | 10.60.0.0/16 | rg-network-hub-lab | Shared network services |
-| Spoke 1 | 10.61.0.0/16 | rg-network-spoke1-lab | Application workload |
-| Spoke 2 | 10.62.0.0/16 | rg-network-spoke2-lab | Second application |
+| Hub | 10.60.0.0/16 | rg-hubspoke-hub-cac | Shared network services |
+| Spoke 1 | 10.61.0.0/16 | rg-hubspoke-spoke1-cac | Application workload |
+| Spoke 2 | 10.62.0.0/16 | rg-hubspoke-spoke2-cac | Second application |
 
 Avoids 10.50.0.0/16, used by the APIM networking lab.
 

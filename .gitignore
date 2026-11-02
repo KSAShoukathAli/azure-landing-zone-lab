@@ -1,4 +1,4 @@
-﻿# Terraform
+# Terraform
 .terraform/
 *.tfstate
 *.tfstate.*
@@ -19,3 +19,4 @@ tfplan
 .DS_Store
 Thumbs.db
 .vscode/
+*.tfvars.json
