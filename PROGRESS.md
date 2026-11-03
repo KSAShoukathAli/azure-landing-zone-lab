@@ -29,3 +29,4 @@ Paste this file into ChatGPT or Claude when switching between them.
 - Phase 1 kept flat in terraform/envs/lab; module refactor is Phase 3
 - ChatGPT's network phases are sub-labs of repo Phase 1: 1.1 skeleton, 1.2 packet routing, 1.3 NSGs vs routes, 1.4 spoke-to-spoke via firewall
 - Disposable resources get their own Terraform root (envs/probes) so destroy cannot touch the network foundation
+- 2026-11-02 1.2 finding: hub NIC has 10.61/16 + 10.62/16 VNetPeering; each spoke has only 10.60/16. Hub knows all routes but does not forward; spoke-to-spoke needs routes on both spokes + a forwarder.
