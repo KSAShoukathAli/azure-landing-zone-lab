@@ -93,7 +93,7 @@ resource "azurerm_virtual_network_peering" "spoke1_to_hub" {
   remote_virtual_network_id = azurerm_virtual_network.hub.id
 
   allow_virtual_network_access = true
-  allow_forwarded_traffic      = false
+  allow_forwarded_traffic      = true
   allow_gateway_transit        = false
   use_remote_gateways          = false
 
@@ -123,7 +123,7 @@ resource "azurerm_virtual_network_peering" "spoke2_to_hub" {
   remote_virtual_network_id = azurerm_virtual_network.hub.id
 
   allow_virtual_network_access = true
-  allow_forwarded_traffic      = false
+  allow_forwarded_traffic      = true
   allow_gateway_transit        = false
   use_remote_gateways          = false
 
