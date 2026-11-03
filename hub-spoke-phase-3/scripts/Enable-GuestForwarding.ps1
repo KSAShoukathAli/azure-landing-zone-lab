@@ -1,10 +1,19 @@
-# Azure Run Command needs VM-agent connectivity. A failed invoke is not routing evidence.
+# Uses Azure CLI's documented @file syntax to preserve Linux script quoting and newlines.
+# Does not alter Terraform or Azure resources outside the hub VM's guest OS.
 $ErrorActionPreference = 'Stop'
-$script = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'enable-hub-forwarding.sh') -Raw
-Write-Host 'Enabling Linux kernel forwarding on the EXISTING hub VM via Azure Run Command...' -ForegroundColor Cyan
-az vm run-command invoke --resource-group rg-hubspoke-hub-cac --name vm-probe-hub-cac --command-id RunShellScript --scripts $script --query 'value[].message' -o tsv
-if ($LASTEXITCODE -ne 0) {
-    Write-Warning 'Azure Run Command failed. Do not claim traffic forwarding is operational. Check VM Agent and management-plane outbound requirements; see README.'
-    exit 1
+$scriptFile = Join-Path $PSScriptRoot 'enable-hub-forwarding.sh'
+if (-not (Test-Path -LiteralPath $scriptFile)) { throw "Missing Linux forwarding script: $scriptFile" }
+Write-Host 'Enabling Linux forwarding on the existing hub VM using a script FILE...' -ForegroundColor Cyan
+$output = & az vm run-command invoke `
+  --resource-group rg-hubspoke-hub-cac `
+  --name vm-probe-hub-cac `
+  --command-id RunShellScript `
+  --scripts "@$scriptFile" `
+  --query 'value[].message' -o tsv
+$exitCode = $LASTEXITCODE
+$output | Out-Host
+if ($exitCode -ne 0) { throw 'Azure Run Command failed. Check VM agent connectivity and command output.' }
+if (($output -join "`n") -notmatch 'Kernel ip_forward:\s*1') {
+  throw 'Azure command returned, but the Linux forwarding status was not confirmed as 1. Inspect stdout/stderr before proceeding.'
 }
-Write-Host 'Review the command output for `Kernel ip_forward: 1` and errors.' -ForegroundColor Green
+Write-Host 'Linux guest kernel forwarding confirmed: ip_forward = 1' -ForegroundColor Green
