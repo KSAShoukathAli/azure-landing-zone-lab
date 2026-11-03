@@ -33,3 +33,4 @@ Paste this file into ChatGPT or Claude when switching between them.
 - 2026-11-03 Phase 1.3 (ChatGPT Phase 3): hub VM as Linux router. Stage A = Spoke 1 UDR only; Stage B = return UDR + hub NIC forwarding + spoke peering forwarded flags + guest ip_forward. Helper scripts in hub-spoke-phase-3/.
 - 2026-11-03 1.3 Stage A ping test: spoke1->hub 3/3 ttl=64; spoke1->spoke2 0/3; spoke2->spoke1 0/3. Run Command works on private VMs.
 - 2026-11-03 1.3 DONE: spoke1<->spoke2 via hub Linux router, 3/3 both ways, ttl=63 (vs 64 direct), ~2.3ms vs ~1.2ms. Failure point moved gate by gate: spoke1 (no route) -> hub NIC (no NIC forwarding) -> hub Linux (ip_forward=0) -> delivered. Next: governance (Azure Policy) or NSGs.
+- 2026-11-03 Lab journal added: docs/lab-journal.html (chapters 0, 1.1, 1.2, 1.3, 2.0; 2.1 next). Share with ChatGPT when switching.

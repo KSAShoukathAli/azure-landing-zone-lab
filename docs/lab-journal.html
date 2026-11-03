@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Landing Zone Lab Journal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #fbfaf7;
+  --surface: #ffffff;
+  --ink: #1d232b;
+  --muted: #5b6573;
+  --line: #dfe2e6;
+  --accent: #0f62fe;
+  --accent-soft: #e6eeff;
+  --ok: #198038;
+  --ok-soft: #e3f4e8;
+  --bad: #c62828;
+  --bad-soft: #fdeaea;
+  --warn: #8a5a00;
+  --warn-soft: #fff4d6;
+  --code-bg: #f2f4f7;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171c;
+    --surface: #1b1f26;
+    --ink: #e6e9ee;
+    --muted: #9aa4b2;
+    --line: #2d333c;
+    --accent: #78a9ff;
+    --accent-soft: #1c2a45;
+    --ok: #42be65;
+    --ok-soft: #16301f;
+    --bad: #ff8389;
+    --bad-soft: #3a1c1e;
+    --warn: #f1c21b;
+    --warn-soft: #3a3014;
+    --code-bg: #232831;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14171c;
+  --surface: #1b1f26;
+  --ink: #e6e9ee;
+  --muted: #9aa4b2;
+  --line: #2d333c;
+  --accent: #78a9ff;
+  --accent-soft: #1c2a45;
+  --ok: #42be65;
+  --ok-soft: #16301f;
+  --bad: #ff8389;
+  --bad-soft: #3a1c1e;
+  --warn: #f1c21b;
+  --warn-soft: #3a3014;
+  --code-bg: #232831;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  font-size: 17px;
+  line-height: 1.6;
+}
+.wrap { max-width: 880px; margin: 0 auto; padding: 40px 16px 80px; }
+header.top { border-bottom: 2px solid var(--ink); padding-bottom: 20px; margin-bottom: 28px; }
+.kicker { font-family: "IBM Plex Mono", monospace; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: 38px; line-height: 1.15; margin: 6px 0 10px; font-weight: 600; }
+h2 { font-size: 26px; line-height: 1.25; margin: 56px 0 6px; font-weight: 600; }
+h3 { font-size: 19px; margin: 28px 0 8px; font-weight: 600; }
+.chapno { font-family: "IBM Plex Mono", monospace; font-size: 13px; color: var(--accent); letter-spacing: .05em; margin-top: 56px; }
+.chapno + h2 { margin-top: 4px; }
+p { margin: 10px 0; }
+.lede { font-size: 19px; color: var(--muted); margin: 0; }
+.story {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  padding: 14px 18px;
+  margin: 16px 0 20px;
+  font-style: italic;
+}
+.story p { margin: 6px 0; }
+code, pre, .mono { font-family: "IBM Plex Mono", monospace; font-size: 14.5px; }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 3px; }
+pre {
+  background: var(--code-bg);
+  padding: 14px 16px;
+  border-radius: 6px;
+  overflow-x: auto;
+  line-height: 1.45;
+  margin: 12px 0;
+}
+pre code { background: none; padding: 0; }
+.table-wrap { overflow-x: auto; margin: 12px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 15.5px; background: var(--surface); }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; border-bottom: 2px solid var(--line); white-space: nowrap; }
+td code { white-space: nowrap; }
+.callout { border: 1px solid var(--line); border-radius: 6px; padding: 12px 16px; margin: 16px 0; background: var(--surface); }
+.callout.key { border-left: 4px solid var(--accent); }
+.callout.ok { border-left: 4px solid var(--ok); background: var(--ok-soft); }
+.callout.warn { border-left: 4px solid var(--warn); background: var(--warn-soft); }
+.callout .label { font-family: "IBM Plex Mono", monospace; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); display: block; margin-bottom: 4px; }
+.interview { border: 1px dashed var(--accent); border-radius: 6px; padding: 12px 16px; margin: 18px 0; }
+.interview .label { font-family: "IBM Plex Mono", monospace; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); display: block; margin-bottom: 4px; }
+.interview p { margin: 4px 0; }
+.check { margin: 14px 0; }
+.check ol { margin: 6px 0; padding-left: 22px; }
+nav.toc { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 14px 18px; margin: 20px 0 10px; }
+nav.toc ol { margin: 6px 0 0; padding-left: 20px; }
+nav.toc a { color: var(--accent); text-decoration: none; }
+nav.toc a:hover { text-decoration: underline; }
+.status { display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: 12px; padding: 1px 8px; border-radius: 10px; }
+.status.done { background: var(--ok-soft); color: var(--ok); }
+.status.next { background: var(--warn-soft); color: var(--warn); }
+.pass { color: var(--ok); font-weight: 600; }
+.fail { color: var(--bad); font-weight: 600; }
+figure { margin: 18px 0; }
+figure svg { width: 100%; height: auto; display: block; }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 6px; }
+svg .box { fill: var(--surface); stroke: var(--ink); stroke-width: 1.5; }
+svg .box-accent { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+svg .t { fill: var(--ink); font-family: "IBM Plex Sans", sans-serif; font-size: 15px; }
+svg .t-b { fill: var(--ink); font-family: "IBM Plex Sans", sans-serif; font-size: 16px; font-weight: 600; }
+svg .t-m { fill: var(--muted); font-family: "IBM Plex Mono", monospace; font-size: 12.5px; }
+svg .t-ok { fill: var(--ok); font-family: "IBM Plex Mono", monospace; font-size: 12.5px; }
+svg .t-bad { fill: var(--bad); font-family: "IBM Plex Sans", sans-serif; font-size: 15px; font-weight: 600; }
+svg .t-acc { fill: var(--accent); font-family: "IBM Plex Mono", monospace; font-size: 13px; font-weight: 500; }
+svg .ln { stroke: var(--ink); stroke-width: 1.6; fill: none; }
+svg .ln-acc { stroke: var(--accent); stroke-width: 2; fill: none; }
+svg .ln-bad { stroke: var(--bad); stroke-width: 1.6; fill: none; stroke-dasharray: 5 5; }
+svg .dot-bad { fill: var(--bad); }
+svg .dot-ok { fill: var(--ok); }
+footer { margin-top: 60px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+@media (max-width: 600px) {
+  body { font-size: 16px; }
+  h1 { font-size: 30px; }
+  h2 { font-size: 22px; }
+  table { font-size: 14px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="kicker">Azure Landing Zone Lab - hands-on journal</div>
+  <h1>Why the packet went where it went</h1>
+  <p class="lede">A chapter per lab session. What you built, what broke, and what Azure was actually doing underneath. Repo: <code>azure-landing-zone-lab</code>. Last updated 2026-11-03.</p>
+</header>
+
+<nav class="toc">
+  <strong>Chapters</strong>
+  <ol>
+    <li><a href="#ch0">Why this lab exists</a></li>
+    <li><a href="#ch11">1.1 - The network skeleton</a> <span class="status done">done</span></li>
+    <li><a href="#ch12">1.2 - Where does the packet go?</a> <span class="status done">done</span></li>
+    <li><a href="#ch13">1.3 - A route is not a router</a> <span class="status done">done</span></li>
+    <li><a href="#ch20">2.0 - Scopes, management groups and CAF</a> <span class="status done">concepts</span></li>
+    <li><a href="#ch21">2.1 - Guardrails with Azure Policy</a> <span class="status next">next</span></li>
+    <li><a href="#gotchas">Things that tripped me up</a></li>
+    <li><a href="#state">Where the lab stands right now</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ CH 0 -->
+<div class="chapno" id="ch0">CHAPTER 0</div>
+<h2>Why this lab exists</h2>
+
+<div class="story">
+<p>The job description says "own landing zones, network topology, and governance policies." Networking is your weakest area in Azure. You could read about hub-and-spoke for a week and still freeze when an interviewer asks why spoke 1 can't reach spoke 2.</p>
+<p>So you build it, break it on purpose, and watch where the packet dies.</p>
+</div>
+
+<p>The lab runs in one MSDN subscription in Canada Central. Real landing zones use many subscriptions. Here, resource groups stand in for them, and separate Terraform roots stand in for separate owners.</p>
+
+<div class="table-wrap"><table>
+<tr><th>Repo phase</th><th>What you build</th><th>JD line it answers</th></tr>
+<tr><td>1</td><td>Hub-and-spoke VNets, peering, routing, a router in the hub</td><td>Network topology</td></tr>
+<tr><td>2</td><td>Azure Policy guardrails, management group thinking</td><td>Governance policies</td></tr>
+<tr><td>3</td><td>Reusable Terraform modules (hub, spoke)</td><td>Reusable modules</td></tr>
+<tr><td>4</td><td>GitHub Actions: plan on PR, apply on merge, remote state</td><td>IaC and CI/CD</td></tr>
+<tr><td>5</td><td>Architecture diagram and design decisions</td><td>Reference architectures</td></tr>
+<tr><td>6</td><td>"How a new app team gets a spoke"</td><td>Standards, mentoring</td></tr>
+</table></div>
+
+<p>Address plan: hub <code>10.60.0.0/16</code>, spoke 1 <code>10.61.0.0/16</code>, spoke 2 <code>10.62.0.0/16</code>. Chosen to avoid <code>10.50.0.0/16</code>, which the APIM lab uses.</p>
+
+<p>Work is done with both ChatGPT and Claude. ChatGPT numbers its network sessions Phase 1, 2, 3. In this repo they are sub-labs 1.1, 1.2, 1.3. <code>PROGRESS.md</code> is the handoff file between the two.</p>
+
+<!-- ============================================================ CH 1.1 -->
+<div class="chapno" id="ch11">CHAPTER 1.1</div>
+<h2>The network skeleton</h2>
+
+<div class="story">
+<p>Two VNets sit in the same subscription, same region, a few clicks apart. You'd assume they can talk. They can't. Every VNet starts as an island, and the only bridge you get is one you build from both sides.</p>
+</div>
+
+<h3>What got built</h3>
+<p>Root: <code>terraform/envs/lab</code>. 3 resource groups, 3 VNets, 4 peerings. 10 resources. No subnets, no VMs.</p>
+
+<figure>
+<svg viewBox="0 0 640 300" role="img" aria-label="Hub VNet peered to two spokes, no peering between spokes">
+  <rect class="box-accent" x="220" y="20" width="200" height="70" rx="6"/>
+  <text class="t-b" x="320" y="50" text-anchor="middle">vnet-hub-cac</text>
+  <text class="t-m" x="320" y="72" text-anchor="middle">10.60.0.0/16</text>
+  <rect class="box" x="30" y="200" width="200" height="70" rx="6"/>
+  <text class="t-b" x="130" y="230" text-anchor="middle">vnet-spoke1-cac</text>
+  <text class="t-m" x="130" y="252" text-anchor="middle">10.61.0.0/16</text>
+  <rect class="box" x="410" y="200" width="200" height="70" rx="6"/>
+  <text class="t-b" x="510" y="230" text-anchor="middle">vnet-spoke2-cac</text>
+  <text class="t-m" x="510" y="252" text-anchor="middle">10.62.0.0/16</text>
+  <line class="ln" x1="270" y1="90" x2="150" y2="200"/>
+  <line class="ln" x1="370" y1="90" x2="490" y2="200"/>
+  <text class="t-m" x="140" y="140" text-anchor="middle">2 peerings</text>
+  <text class="t-m" x="500" y="140" text-anchor="middle">2 peerings</text>
+  <line class="ln-bad" x1="230" y1="235" x2="410" y2="235"/>
+  <text class="t-bad" x="320" y="225" text-anchor="middle">no peering</text>
+</svg>
+<figcaption>Each hub-spoke pair has two peering objects, one owned by each side.</figcaption>
+</figure>
+
+<h3>Why two peerings per pair</h3>
+<p>A peering isn't a cable between two VNets. It's a setting that lives <em>inside one VNet</em> and points at another. <code>peer-hub-to-spoke1</code> lives on the hub. <code>peer-spoke1-to-hub</code> lives on spoke 1.</p>
+<p>Think handshake. One hand out gives you <code>Initiated</code>, and nothing flows. Both hands give you <code>Connected</code>. Azure designed it this way because in a real company the hub and the spoke have different owners, often in different subscriptions. Neither should be able to wire into the other alone.</p>
+
+<h3>The checkboxes on each peering</h3>
+<div class="table-wrap"><table>
+<tr><th>Portal wording</th><th>Terraform</th><th>Question it answers</th><th>Lab value</th></tr>
+<tr><td>Allow X to access Y</td><td><code>allow_virtual_network_access</code></td><td>Can traffic I start reach the peer?</td><td>true</td></tr>
+<tr><td>Allow X to receive forwarded traffic from Y</td><td><code>allow_forwarded_traffic</code></td><td>Will I accept packets the peer is passing along from somewhere else?</td><td>false (until 1.3)</td></tr>
+<tr><td>Allow gateway in X to forward traffic to Y</td><td><code>allow_gateway_transit</code></td><td>Can the peer use my VPN/ExpressRoute gateway?</td><td>false</td></tr>
+<tr><td>Enable X to use Y's remote gateway</td><td><code>use_remote_gateways</code></td><td>Do I use the peer's gateway?</td><td>false</td></tr>
+</table></div>
+
+<div class="callout key"><span class="label">The idea to keep</span>
+Peering settings are about what a VNet will <strong>accept</strong>. They never move a packet. Routes and a forwarder decide where packets go.
+</div>
+
+<h3>Evidence</h3>
+<pre><code>peer-hub-to-spoke1   Connected  FullyInSync
+peer-hub-to-spoke2   Connected  FullyInSync
+peer-spoke1-to-hub   Connected  FullyInSync
+peer-spoke2-to-hub   Connected  FullyInSync</code></pre>
+<p><code>Connected</code> proves the control plane is set up. It doesn't prove a single packet has moved. There were no VMs yet.</p>
+
+<h3>Terraform notes</h3>
+<p>The four peerings are chained with <code>depends_on</code>. Azure locks a VNet while one of its peerings changes, so two changes at once on the hub fail with <code>AnotherOperationInProgress</code>. <code>outputs.tf</code> creates nothing. It prints values after apply, and later becomes how modules hand values to each other.</p>
+
+<div class="interview"><span class="label">Interview line</span>
+<p>"A peering is a one-way setting owned by each VNet. You need both halves for Connected, and it only connects those two VNets, never a third."</p>
+</div>
+
+<!-- ============================================================ CH 1.2 -->
+<div class="chapno" id="ch12">CHAPTER 1.2</div>
+<h2>Where does the packet go?</h2>
+
+<div class="story">
+<p>A VM in spoke 1 sends one packet to the hub and one to spoke 2. Same subscription, same region, both spokes peered to the same hub. One arrives. The other is dropped before it ever leaves spoke 1. The hub never even sees it.</p>
+</div>
+
+<h3>What got built</h3>
+<p>Root: <code>terraform/envs/probes</code>, a separate Terraform root. One subnet, one NIC and one small Ubuntu VM in each VNet, all at <code>.4</code>: <code>10.60.1.4</code>, <code>10.61.1.4</code>, <code>10.62.1.4</code>. 9 resources. No public IPs.</p>
+<p>Why a VM at all? Azure keeps the effective route table on the <strong>NIC</strong>, and a NIC only reports routes when it's attached to a running VM. The VM is just the power supply for the NIC.</p>
+<p>Why <code>.4</code>? Azure keeps the first four addresses of every subnet (<code>.0</code> network, <code>.1</code> gateway, <code>.2</code> and <code>.3</code> DNS) and the last one. <code>.4</code> is the first you can use.</p>
+
+<h3>Separate root, read-only links</h3>
+<p>The probes root reads the Phase 1.1 VNets through <code>data</code> blocks. A <code>data</code> block is a GET, not a POST. It's not in this root's state, so <code>terraform destroy</code> here can't touch the network.</p>
+<div class="table-wrap"><table>
+<tr><th>Values you decide</th><th>Values Azure decides</th></tr>
+<tr><td>Names, CIDRs, IPs: keep in <code>locals</code></td><td>Location, resource IDs: read from <code>data</code></td></tr>
+</table></div>
+<p>Check after apply: <code>terraform plan</code> in <code>envs/lab</code> said <strong>No changes</strong>. The subnets created by the second root didn't make the first root want to remove them.</p>
+
+<h3>The three route tables</h3>
+<div class="table-wrap"><table>
+<tr><th>NIC</th><th>VnetLocal</th><th>VNetPeering</th><th>Falls into 10.0.0.0/8 None</th></tr>
+<tr><td>hub</td><td>10.60/16</td><td>10.61/16, 10.62/16</td><td>anything else in 10.x</td></tr>
+<tr><td>spoke1</td><td>10.61/16</td><td>10.60/16</td><td>10.62 and the rest</td></tr>
+<tr><td>spoke2</td><td>10.62/16</td><td>10.60/16</td><td>10.61 and the rest</td></tr>
+</table></div>
+<p>Every row had <code>Source = Default</code>. You hadn't written a single route. Azure created them all.</p>
+
+<h3>Longest prefix wins</h3>
+<p>The number after the slash is how much of the address the rule pins down. <code>/8</code> fixes the first number, <code>/16</code> the first two. Bigger number, more specific rule. When several rules match, Azure follows the most specific one. Like mail: a letter to Toronto matches "anything to Canada" and "anything to Toronto." You follow the Toronto rule.</p>
+
+<div class="table-wrap"><table>
+<tr><th>From spoke 1 to</th><th>Matching rules</th><th>Winner</th><th>Result</th></tr>
+<tr><td><code>10.60.1.4</code></td><td>0/0, 10/8, 10.60/16</td><td>10.60/16 VNetPeering</td><td class="pass">delivered</td></tr>
+<tr><td><code>10.62.1.4</code></td><td>0/0, 10/8</td><td>10/8 None</td><td class="fail">dropped in spoke 1</td></tr>
+</table></div>
+
+<p>Why does <code>10.0.0.0/8 -&gt; None</code> exist at all? Without it, <code>0.0.0.0/0 -&gt; Internet</code> would catch private traffic and push it at the internet. It's a safety net. The long list of other <code>None</code> rows are the same idea for other private and Azure-reserved ranges. Only four rows matter: own VNet, peer, <code>10/8 None</code>, <code>0/0 Internet</code>.</p>
+
+<div class="callout key"><span class="label">The idea to keep</span>
+The hub knows routes to both spokes, but knowing a route only helps the hub's own VMs. A packet from spoke 1 never reaches the hub, because spoke 1 drops it first. And spoke 2 has no route back either.
+</div>
+
+<div class="interview"><span class="label">Interview line</span>
+<p>"Azure routes by longest prefix match. Peering adds a /16 for the peer only. A third VNet's range falls back to the 10.0.0.0/8 system route with next hop None. To fix it you add something more specific: a direct peering or a UDR to a router in the hub."</p>
+</div>
+
+<!-- ============================================================ CH 1.3 -->
+<div class="chapno" id="ch13">CHAPTER 1.3</div>
+<h2>A route is not a router</h2>
+
+<div class="story">
+<p>You add one route to spoke 1: "send 10.62 traffic to the hub VM." Network Watcher instantly turns green: next hop VirtualAppliance 10.60.1.4. You ping. Nothing. Every tool says yes. The packet still dies. The lesson of this chapter is finding out where.</p>
+</div>
+
+<h3>The envelope</h3>
+<p>Every packet is an envelope with two addresses. <strong>They never change for the whole trip.</strong></p>
+<pre><code>From: 10.61.1.4   (spoke 1)
+To:   10.62.1.4   (spoke 2)</code></pre>
+<p>The hub VM, 10.60.1.4, is never written on it. It's a mailroom along the way.</p>
+
+<h3>The five gates</h3>
+<figure>
+<svg viewBox="0 0 840 250" role="img" aria-label="Packet path from spoke 1 through hub NIC and hub Linux to spoke 2, with five gates">
+  <rect class="box" x="10" y="60" width="130" height="60" rx="6"/>
+  <text class="t-b" x="75" y="88" text-anchor="middle">Spoke 1 VM</text>
+  <text class="t-m" x="75" y="108" text-anchor="middle">10.61.1.4</text>
+  <rect class="box-accent" x="240" y="60" width="130" height="60" rx="6"/>
+  <text class="t-b" x="305" y="88" text-anchor="middle">Hub NIC</text>
+  <text class="t-m" x="305" y="108" text-anchor="middle">Azure layer</text>
+  <rect class="box-accent" x="470" y="60" width="130" height="60" rx="6"/>
+  <text class="t-b" x="535" y="88" text-anchor="middle">Hub Linux</text>
+  <text class="t-m" x="535" y="108" text-anchor="middle">guest OS</text>
+  <rect class="box" x="700" y="60" width="130" height="60" rx="6"/>
+  <text class="t-b" x="765" y="88" text-anchor="middle">Spoke 2 VM</text>
+  <text class="t-m" x="765" y="108" text-anchor="middle">10.62.1.4</text>
+  <line class="ln-acc" x1="140" y1="90" x2="240" y2="90"/>
+  <line class="ln-acc" x1="370" y1="90" x2="470" y2="90"/>
+  <line class="ln-acc" x1="600" y1="90" x2="700" y2="90"/>
+  <text class="t-acc" x="190" y="50" text-anchor="middle">1</text>
+  <text class="t-acc" x="305" y="50" text-anchor="middle">2</text>
+  <text class="t-acc" x="535" y="50" text-anchor="middle">3</text>
+  <text class="t-acc" x="650" y="50" text-anchor="middle">4</text>
+  <text class="t-m" x="190" y="150" text-anchor="middle">UDR on</text>
+  <text class="t-m" x="190" y="166" text-anchor="middle">spoke 1</text>
+  <text class="t-m" x="305" y="150" text-anchor="middle">NIC IP</text>
+  <text class="t-m" x="305" y="166" text-anchor="middle">forwarding</text>
+  <text class="t-m" x="535" y="150" text-anchor="middle">ip_forward</text>
+  <text class="t-m" x="535" y="166" text-anchor="middle">= 1</text>
+  <text class="t-m" x="650" y="150" text-anchor="middle">spoke 2 accepts</text>
+  <text class="t-m" x="650" y="166" text-anchor="middle">forwarded</text>
+  <path class="ln" d="M765 120 L765 205 L75 205 L75 120"/>
+  <text class="t-acc" x="420" y="198" text-anchor="middle">5</text>
+  <text class="t-m" x="420" y="232" text-anchor="middle">reply needs a UDR on spoke 2, then gates 2, 3 and 4 again</text>
+</svg>
+<figcaption>Miss any one gate and the ping fails, with no error message.</figcaption>
+</figure>
+
+<div class="table-wrap"><table>
+<tr><th>Gate</th><th>Setting</th><th>Why it's closed by default</th><th>Controlled by</th></tr>
+<tr><td>1</td><td>UDR on spoke 1: <code>10.62/16 -&gt; VirtualAppliance 10.60.1.4</code></td><td>No route, falls into <code>10/8 None</code></td><td>Terraform (probes)</td></tr>
+<tr><td>2</td><td>Hub NIC <code>ip_forwarding_enabled</code></td><td>Azure won't hand a NIC a packet addressed to someone else (anti-spoofing)</td><td>Terraform (probes)</td></tr>
+<tr><td>3</td><td>Linux <code>net.ipv4.ip_forward = 1</code></td><td>A normal computer drops packets that aren't for it</td><td>Run Command, not Terraform</td></tr>
+<tr><td>4</td><td><code>allow_forwarded_traffic</code> on the <strong>spoke-side</strong> peerings</td><td>Spoke 2 sees "From 10.61" arriving from the hub and refuses it</td><td>Terraform (lab)</td></tr>
+<tr><td>5</td><td>UDR on spoke 2: <code>10.61/16 -&gt; 10.60.1.4</code></td><td>The reply has no route home</td><td>Terraform (probes)</td></tr>
+</table></div>
+
+<h3>Why only the spoke-side peering flags</h3>
+<p>Forwarded means "the From address isn't in the sender's own range." Follow the envelope. Spoke 1 to hub: From 10.61, arriving from spoke 1. Normal. Hub to spoke 2: From 10.61, arriving from the hub. Forwarded. The hub never receives forwarded traffic, only the spokes do. So only <code>peer-spoke1-to-hub</code> and <code>peer-spoke2-to-hub</code> changed.</p>
+
+<h3>How the failure point moved</h3>
+<div class="table-wrap"><table>
+<tr><th>Stage</th><th>Gates open</th><th>Network Watcher said</th><th>Ping</th><th>Packet died at</th></tr>
+<tr><td>Before</td><td>none</td><td>None</td><td class="fail">0/3</td><td>inside spoke 1</td></tr>
+<tr><td>Stage A</td><td>1</td><td>VirtualAppliance</td><td class="fail">0/3</td><td>the hub NIC</td></tr>
+<tr><td>Stage B, Azure only</td><td>1, 2, 4, 5</td><td>VirtualAppliance both ways</td><td class="fail">0/3</td><td>inside hub Linux</td></tr>
+<tr><td>Stage B, Linux on</td><td>all five</td><td>VirtualAppliance both ways</td><td class="pass">3/3 both ways</td><td>delivered</td></tr>
+</table></div>
+
+<div class="callout warn"><span class="label">Troubleshooting lesson</span>
+Network Watcher shows gate 1's <em>decision</em>, not delivery. It went green at Stage A and stayed green while the packet died twice more. Check gate by gate. Don't stop at the first tool that looks green.
+</div>
+
+<h3>The proof: TTL 63</h3>
+<pre><code>spoke1 -&gt; hub      ttl=64   ~1.2 ms   direct over peering
+spoke1 -&gt; spoke2   ttl=63   ~2.3 ms   through one router
+spoke2 -&gt; spoke1   ttl=63   ~2.4 ms   through one router</code></pre>
+<p>Linux starts TTL at 64. Every router subtracts one. Azure's fabric and peerings never touch it. Only the hub VM's kernel did. That missing 1 is proof the traffic went through the hub.</p>
+
+<h3>Two route tables, two layers</h3>
+<p>Inside every VM, Linux has one rule: send everything to the subnet gateway (<code>via 10.61.1.1</code>, <code>via 10.60.1.1</code>). Linux knows nothing about peerings or UDRs. Azure applies the effective route table after the packet leaves the VM. <strong>Linux decides whether to forward. Azure decides where it goes next.</strong></p>
+
+<h3>New Terraform tricks</h3>
+<ul>
+<li><code>count = var.x ? 1 : 0</code> as an on/off switch. Switches live in <code>phase3.auto.tfvars</code>, which Terraform loads automatically.</li>
+<li>A UDR is three resources: route table, route, and the subnet association. Without the association nothing uses it. Route tables attach to <strong>subnets</strong>.</li>
+<li>One resource, one owner. Route tables and the NIC flag went in <code>probes</code> (owns subnets and NICs). Peering flags went in <code>lab</code> (owns peerings). Each root is planned and applied on its own.</li>
+<li><code>(known after apply)</code> means Azure will tell Terraform the value at creation: IDs, and read-back lists like a route table's <code>route</code> and <code>subnets</code>.</li>
+<li>Outputs built from resource attributes stay true. Hardcoded output text goes stale. The old "No UDR" output was replaced with one that lists the real routes.</li>
+</ul>
+
+<h3>What changes with Azure Firewall</h3>
+<div class="table-wrap"><table>
+<tr><th>Gate</th><th>Linux VM (built)</th><th>Azure Firewall</th></tr>
+<tr><td>UDRs on both spokes</td><td>needed</td><td>same, next hop = firewall private IP</td></tr>
+<tr><td>Spoke-side forwarded flag</td><td>needed</td><td>same</td></tr>
+<tr><td>NIC IP forwarding</td><td>you turned it on</td><td>gone, managed service</td></tr>
+<tr><td>Guest ip_forward</td><td>you turned it on</td><td>gone, no OS</td></tr>
+<tr><td>Allow rule</td><td>not needed, allows all</td><td><strong>required</strong>, denies all by default</td></tr>
+</table></div>
+<p>Azure Firewall needs a subnet named exactly <code>AzureFirewallSubnet</code>, at least /26. Third-party firewalls (Palo Alto, Fortinet) are VMs, so all the original gates apply. In real hub-and-spoke designs, spoke-to-spoke and internet egress go through the firewall. Traffic inside one spoke stays local and is filtered with NSGs. One summary UDR like <code>10.0.0.0/8 -&gt; firewall</code> covers every spoke.</p>
+
+<div class="interview"><span class="label">Interview line</span>
+<p>"Peering isn't transitive and a VNet doesn't forward packets, so spoke-to-spoke needs a router in the hub. I built it with a Linux VM and opened each layer: UDRs on both spokes, IP forwarding on the NIC, IP forwarding in the OS, and allow-forwarded-traffic on the spoke peerings. Network Watcher went green at the first UDR, but packets only flowed once all layers were open, and TTL dropped from 64 to 63. In production that's Azure Firewall, which forwards natively but denies by default."</p>
+</div>
+
+<!-- ============================================================ CH 2.0 -->
+<div class="chapno" id="ch20">CHAPTER 2.0</div>
+<h2>Scopes, management groups and CAF</h2>
+
+<div class="story">
+<p>A company has 50 subscriptions, one per app team per environment. Security says: no public IPs in app subscriptions, Canada Central only, everything tagged. You can assign 150 policies by hand. Then team 51 gets a subscription and somebody forgets.</p>
+</div>
+
+<h3>The scope hierarchy</h3>
+<pre><code>Tenant (Entra ID directory)
+ +-- Tenant Root Group          created automatically, one per tenant
+      +-- Management group      a folder for subscriptions (nests up to 6 levels)
+           +-- Subscription     billing and quota boundary
+                +-- Resource group   lifecycle folder
+                     +-- Resource</code></pre>
+<p>Anything assigned at a scope flows down to everything below it, both Azure Policy and RBAC. A child can't override a parent's Deny. The only way out is an exemption granted from above. That's why an app team can be Owner of its subscription and still not break platform rules.</p>
+
+<h3>CAF, built one folder at a time</h3>
+<p>The Cloud Adoption Framework is Microsoft's playbook, not a product. Its landing zone design is a standard management group tree:</p>
+<pre><code>Tenant Root Group
+ +-- Contoso                    company rules: regions, tags
+      +-- Platform              run by the platform team
+      |    +-- Connectivity     hub VNet, firewall, VPN    (your hub RG)
+      |    +-- Identity
+      |    +-- Management       Log Analytics, monitoring
+      +-- Landing Zones         run by app teams
+      |    +-- Corp             internal, peered to hub, no public IPs   (your spoke RGs)
+      |    +-- Online           internet-facing apps
+      +-- Sandbox               playground, not connected to the hub
+      +-- Decommissioned        being shut down, no new deployments</code></pre>
+<p>Rules stack down. A Corp subscription gets Contoso's rules, Landing Zones' rules and Corp's rules. Connectivity sits under Platform, so the "no public IPs" rule never reaches the hub. That's why the hub can hold a firewall with a public IP.</p>
+
+<div class="callout key"><span class="label">What a landing zone is</span>
+A subscription that's ready before the app team arrives: already in the right folder, already peered to the hub, already sending logs to Management. The team lands and builds. In this lab, each spoke is a landing zone.
+</div>
+
+<h3>Terraform mirrors the tree</h3>
+<div class="table-wrap"><table>
+<tr><th>CAF piece</th><th>Terraform root</th><th>Owner</th></tr>
+<tr><td>Management groups and policy</td><td><code>governance</code></td><td>Platform or security</td></tr>
+<tr><td>Connectivity</td><td><code>connectivity</code></td><td>Platform network team</td></tr>
+<tr><td>Management</td><td><code>management</code></td><td>Platform ops</td></tr>
+<tr><td>Each landing zone</td><td><code>landing-zones/&lt;team&gt;</code></td><td>Platform creates, app team builds inside</td></tr>
+</table></div>
+<p>Separate state, separate pipeline, separate least-privilege identity. Blast radius stays small. This repo already splits <code>governance</code>, <code>lab</code> and <code>probes</code>. The Phase 3 refactor will split <code>lab</code> into <code>connectivity</code> and <code>landing-zones/spoke1</code>, <code>spoke2</code>, both calling a shared spoke module. Producing new landing zones from a standard module is called <strong>subscription vending</strong>. Microsoft's own Terraform for the full tree is Azure Landing Zones (ALZ), now moving into Azure Verified Modules.</p>
+
+<div class="interview"><span class="label">Interview line</span>
+<p>"Management groups are folders above subscriptions. Policy and RBAC assigned there are inherited, and a child can't override a parent's Deny. CAF separates Platform (Connectivity, Identity, Management) from Landing Zones (Corp, Online), and I structure Terraform the same way: separate roots and pipelines per piece, with new landing zones vended from a standard spoke module."</p>
+</div>
+
+<!-- ============================================================ CH 2.1 -->
+<div class="chapno" id="ch21">CHAPTER 2.1</div>
+<h2>Guardrails with Azure Policy <span class="status next">next</span></h2>
+
+<div class="story">
+<p>Friday afternoon. Someone opens the portal and creates a public IP in spoke 1, in East US, with no tags. Monday, security finds an internet-facing endpoint that bypasses the hub, in a region you don't support, owned by nobody.</p>
+</div>
+
+<p>Root: <code>terraform/envs/governance</code>. Owns only policy assignments, so destroy removes only the guardrails.</p>
+<div class="table-wrap"><table>
+<tr><th>Guardrail</th><th>Built-in policy</th><th>Scope</th></tr>
+<tr><td>Region</td><td>Allowed locations = canadacentral</td><td>hub, spoke1, spoke2</td></tr>
+<tr><td>Ownership</td><td>Require tag <code>managed_by</code></td><td>hub, spoke1, spoke2</td></tr>
+<tr><td>No internet exposure</td><td>Not allowed resource types = public IPs</td><td>spoke1, spoke2 only</td></tr>
+</table></div>
+<p>8 assignments, all Deny. Resource group scope because the MSDN subscription is shared with other labs. In production: management group scope. The hub is exempt from the public IP ban, which is the CAF Connectivity versus Corp split in miniature. The tag is <code>managed_by</code>, which every Terraform resource here already carries.</p>
+
+<h3>Planned tests</h3>
+<div class="table-wrap"><table>
+<tr><th>Test</th><th>Attempt</th><th>Expected</th></tr>
+<tr><td>A</td><td>Route table in eastus</td><td>DENIED</td></tr>
+<tr><td>B</td><td>Route table, no tags</td><td>DENIED</td></tr>
+<tr><td>C</td><td>Public IP in spoke 1</td><td>DENIED</td></tr>
+<tr><td>D</td><td>Route table, right region and tag</td><td>ALLOWED</td></tr>
+<tr><td>E</td><td>Public IP in the hub</td><td>ALLOWED</td></tr>
+</table></div>
+
+<div class="check"><strong>Answer before applying</strong>
+<ol>
+<li>Deny is assigned after the VNets and VMs exist. What happens to them?</li>
+<li>Why is the hub allowed public IPs but the spokes are not?</li>
+<li>Terraform resources pass the tag rule. What happens to someone using the portal?</li>
+</ol>
+</div>
+
+<!-- ============================================================ GOTCHAS -->
+<div class="chapno" id="gotchas">FIELD NOTES</div>
+<h2>Things that tripped me up</h2>
+<div class="table-wrap"><table>
+<tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr>
+<tr><td><code>Too many command line arguments</code> on <code>terraform plan -out=x.tfplan</code></td><td>PowerShell splits the argument at the dot</td><td>Quote it: <code>"-out=x.tfplan"</code></td></tr>
+<tr><td><code>].id was unexpected at this time</code></td><td><code>az</code> is a .cmd file. cmd.exe mangles JMESPath filters with brackets and parentheses inside <code>$( )</code></td><td>Loop over explicit names, or use <code>-o json | ConvertFrom-Json</code></td></tr>
+<tr><td>Last night's deallocate silently failed</td><td>Same az.cmd quoting problem</td><td>Check power state before assuming VMs are off</td></tr>
+<tr><td><code>ssh-keygen</code> not recognized</td><td>Not on PATH. Git is a per-user install</td><td>Use <code>...\AppData\Local\Programs\Git\usr\bin\ssh-keygen.exe</code></td></tr>
+<tr><td><code>route:: not found</code> from Run Command</td><td>Script passed as text through az.cmd gets cut and mangled</td><td>Send scripts as files: <code>--scripts "@file.sh"</code></td></tr>
+<tr><td>Output said "No UDR" after creating a UDR</td><td>Output was hardcoded text</td><td>Build outputs from resource attributes</td></tr>
+<tr><td>No "Next hop" in Network Watcher</td><td>Opened the regional resource <code>NetworkWatcher_canadacentral</code></td><td>Open the Network Watcher <em>service</em> page</td></tr>
+<tr><td>Peering checkbox still unchecked after apply</td><td>Portal cached the old view</td><td>F5. When portal and CLI disagree, trust <code>az</code> or <code>terraform plan</code></td></tr>
+<tr><td>Risk: bash fails on <code>\r</code></td><td>Windows line endings in .sh files</td><td><code>.gitattributes</code>: <code>*.sh text eol=lf</code></td></tr>
+<tr><td>Verify script showed blank IP forwarding</td><td>Field is <code>enableIPForwarding</code>, JMESPath is case-sensitive</td><td>Fixed the field name</td></tr>
+</table></div>
+
+<!-- ============================================================ STATE -->
+<div class="chapno" id="state">STATUS</div>
+<h2>Where the lab stands right now</h2>
+<div class="table-wrap"><table>
+<tr><th>Root</th><th>Deployed</th><th>Notes</th></tr>
+<tr><td><code>envs/lab</code></td><td>3 RGs, 3 VNets, 4 peerings</td><td>Spoke-side <code>allow_forwarded_traffic = true</code> (Stage 2)</td></tr>
+<tr><td><code>envs/probes</code></td><td>3 subnets, 3 NICs, 3 VMs, 2 UDRs</td><td>Hub NIC IP forwarding on. VMs deallocated to save cost.</td></tr>
+<tr><td>Hub VM guest OS</td><td><code>ip_forward = 1</code> persisted</td><td>iptables allow rules are lost on restart. Rerun <code>Enable-GuestForwarding.ps1</code> if pings fail.</td></tr>
+<tr><td><code>envs/governance</code></td><td>not yet</td><td>Phase 2.1 is next</td></tr>
+</table></div>
+
+<p><strong>To resume spoke-to-spoke testing:</strong> start the three VMs, rerun <code>Enable-GuestForwarding.ps1</code>, then <code>Test-Phase3Packets.ps1</code>.</p>
+<p><strong>To undo Phase 1.3:</strong> <code>Set-Phase3Stage.ps1 -Stage 0</code>, apply <code>probes</code> first, then <code>lab</code>.</p>
+<p><strong>Destroy order for the whole lab:</strong> governance, then probes, then lab. Never destroy <code>lab</code> while <code>probes</code> still has subnets in its VNets.</p>
+
+<footer>Azure Landing Zone Lab journal. Built with ChatGPT and Claude, verified in a Visual Studio MSDN subscription, Canada Central.</footer>
+
+</div>
+</body>
+</html>
