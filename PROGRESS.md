@@ -30,3 +30,5 @@ Paste this file into ChatGPT or Claude when switching between them.
 - ChatGPT's network phases are sub-labs of repo Phase 1: 1.1 skeleton, 1.2 packet routing, 1.3 NSGs vs routes, 1.4 spoke-to-spoke via firewall
 - Disposable resources get their own Terraform root (envs/probes) so destroy cannot touch the network foundation
 - 2026-11-02 1.2 finding: hub NIC has 10.61/16 + 10.62/16 VNetPeering; each spoke has only 10.60/16. Hub knows all routes but does not forward; spoke-to-spoke needs routes on both spokes + a forwarder.
+- 2026-11-03 Phase 1.3 (ChatGPT Phase 3): hub VM as Linux router. Stage A = Spoke 1 UDR only; Stage B = return UDR + hub NIC forwarding + spoke peering forwarded flags + guest ip_forward. Helper scripts in hub-spoke-phase-3/.
+- 2026-11-03 1.3 Stage A ping test: spoke1->hub 3/3 ttl=64; spoke1->spoke2 0/3; spoke2->spoke1 0/3. Run Command works on private VMs.

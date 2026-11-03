@@ -66,11 +66,12 @@ resource "azurerm_subnet" "probe" {
 
 # NICs have private IP addresses only. No Public IP resources are created.
 resource "azurerm_network_interface" "probe" {
-  for_each            = local.locations
-  name                = "nic-probe-${each.key}-cac"
-  location            = data.azurerm_resource_group.existing[each.key].location
-  resource_group_name = data.azurerm_resource_group.existing[each.key].name
-  tags                = local.common_tags
+  ip_forwarding_enabled = each.key == "hub" && var.phase3_enable_hub_forwarding
+  for_each              = local.locations
+  name                  = "nic-probe-${each.key}-cac"
+  location              = data.azurerm_resource_group.existing[each.key].location
+  resource_group_name   = data.azurerm_resource_group.existing[each.key].name
+  tags                  = local.common_tags
 
   ip_configuration {
     name                          = "private"
