@@ -163,7 +163,8 @@ footer { margin-top: 60px; padding-top: 16px; border-top: 1px solid var(--line);
     <li><a href="#ch12">1.2 - Where does the packet go?</a> <span class="status done">done</span></li>
     <li><a href="#ch13">1.3 - A route is not a router</a> <span class="status done">done</span></li>
     <li><a href="#ch20">2.0 - Scopes, management groups and CAF</a> <span class="status done">concepts</span></li>
-    <li><a href="#ch21">2.1 - Guardrails with Azure Policy</a> <span class="status next">next</span></li>
+    <li><a href="#ch21">2.1 - Policy deny, in isolation</a> <span class="status next">next</span></li>
+    <li><a href="#ch22">2.2 - Guardrails on the landing zone</a> <span class="status next">planned</span></li>
     <li><a href="#gotchas">Things that tripped me up</a></li>
     <li><a href="#state">Where the lab stands right now</a></li>
   </ol>
@@ -271,7 +272,7 @@ peer-spoke2-to-hub   Connected  FullyInSync</code></pre>
 <p>Why <code>.4</code>? Azure keeps the first four addresses of every subnet (<code>.0</code> network, <code>.1</code> gateway, <code>.2</code> and <code>.3</code> DNS) and the last one. <code>.4</code> is the first you can use.</p>
 
 <h3>Separate root, read-only links</h3>
-<p>The probes root reads the Phase 1.1 VNets through <code>data</code> blocks. A <code>data</code> block is a GET, not a POST. It's not in this root's state, so <code>terraform destroy</code> here can't touch the network.</p>
+<p>The probes root reads the Phase 1.1 VNets through <code>data</code> blocks. A <code>data</code> block is a GET, not a POST. Terraform records what it read in state, but it doesn't manage that resource's lifecycle, so <code>terraform destroy</code> here can't touch the network.</p>
 <div class="table-wrap"><table>
 <tr><th>Values you decide</th><th>Values Azure decides</th></tr>
 <tr><td>Names, CIDRs, IPs: keep in <code>locals</code></td><td>Location, resource IDs: read from <code>data</code></td></tr>
@@ -467,7 +468,23 @@ A subscription that's ready before the app team arrives: already in the right fo
 
 <!-- ============================================================ CH 2.1 -->
 <div class="chapno" id="ch21">CHAPTER 2.1</div>
-<h2>Guardrails with Azure Policy <span class="status next">next</span></h2>
+<h2>Policy deny, in isolation <span class="status next">next</span></h2>
+
+<div class="story">
+<p>Your deployment identity is Contributor. RBAC says yes. Terraform plan is green. You apply, and Azure says no. How?</p>
+</div>
+
+<p>Built with ChatGPT. Roots: <code>terraform/envs/policy-lab/governance</code> (throwaway RG, a <strong>custom</strong> policy definition that denies public IPs, and its assignment) and <code>terraform/envs/policy-lab/workload</code> (tries to create a public IP in that RG). Nothing touches the hub-and-spoke network.</p>
+<div class="table-wrap"><table>
+<tr><th>Control</th><th>Question it answers</th><th>Checked when</th></tr>
+<tr><td>RBAC</td><td>Is this identity allowed to do this action?</td><td>Every request</td></tr>
+<tr><td>Azure Policy</td><td>Is this resource allowed to exist, in this shape, here?</td><td>When Resource Manager receives the create or update</td></tr>
+</table></div>
+<p>Expected: <code>terraform plan</code> succeeds because plan never asks Azure Policy. <code>terraform apply</code> fails with <code>RequestDisallowedByPolicy</code>. A green plan doesn't mean the deployment is allowed.</p>
+<p>New terms: a <strong>definition</strong> is the rule (lives at subscription or management group). An <strong>assignment</strong> applies a definition to a scope.</p>
+
+<div class="chapno" id="ch22">CHAPTER 2.2</div>
+<h2>Guardrails on the landing zone <span class="status next">planned</span></h2>
 
 <div class="story">
 <p>Friday afternoon. Someone opens the portal and creates a public IP in spoke 1, in East US, with no tags. Monday, security finds an internet-facing endpoint that bypasses the hub, in a region you don't support, owned by nobody.</p>
@@ -524,13 +541,14 @@ A subscription that's ready before the app team arrives: already in the right fo
 <tr><th>Root</th><th>Deployed</th><th>Notes</th></tr>
 <tr><td><code>envs/lab</code></td><td>3 RGs, 3 VNets, 4 peerings</td><td>Spoke-side <code>allow_forwarded_traffic = true</code> (Stage 2)</td></tr>
 <tr><td><code>envs/probes</code></td><td>3 subnets, 3 NICs, 3 VMs, 2 UDRs</td><td>Hub NIC IP forwarding on. VMs deallocated to save cost.</td></tr>
-<tr><td>Hub VM guest OS</td><td><code>ip_forward = 1</code> persisted</td><td>iptables allow rules are lost on restart. Rerun <code>Enable-GuestForwarding.ps1</code> if pings fail.</td></tr>
-<tr><td><code>envs/governance</code></td><td>not yet</td><td>Phase 2.1 is next</td></tr>
+<tr><td>Hub VM guest OS</td><td><code>ip_forward = 1</code> persisted</td><td>iptables allow rules are lost on restart. Rerun <code>Enable-GuestForwarding.ps1</code> if pings fail. Configured is not the same as reproducibly configured: in production this belongs in cloud-init or config management.</td></tr>
+<tr><td><code>envs/policy-lab</code></td><td>not yet</td><td>Phase 2.1 is next</td></tr>
+<tr><td><code>envs/governance</code></td><td>not yet</td><td>Phase 2.2, script <code>add-phase2-1-2026-11-03.ps1</code> ready (to be renamed)</td></tr>
 </table></div>
 
 <p><strong>To resume spoke-to-spoke testing:</strong> start the three VMs, rerun <code>Enable-GuestForwarding.ps1</code>, then <code>Test-Phase3Packets.ps1</code>.</p>
 <p><strong>To undo Phase 1.3:</strong> <code>Set-Phase3Stage.ps1 -Stage 0</code>, apply <code>probes</code> first, then <code>lab</code>.</p>
-<p><strong>Destroy order for the whole lab:</strong> governance, then probes, then lab. Never destroy <code>lab</code> while <code>probes</code> still has subnets in its VNets.</p>
+<p><strong>Destroy order for the whole lab:</strong> policy-lab workload, policy-lab governance, governance, then probes, then lab. Never destroy <code>lab</code> while <code>probes</code> still has subnets in its VNets.</p>
 
 <footer>Azure Landing Zone Lab journal. Built with ChatGPT and Claude, verified in a Visual Studio MSDN subscription, Canada Central.</footer>
 
