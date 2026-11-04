@@ -152,7 +152,7 @@ footer { margin-top: 60px; padding-top: 16px; border-top: 1px solid var(--line);
 <header class="top">
   <div class="kicker">Azure Landing Zone Lab - hands-on journal</div>
   <h1>Why the packet went where it went</h1>
-  <p class="lede">A chapter per lab session. What you built, what broke, and what Azure was actually doing underneath. Repo: <code>azure-landing-zone-lab</code>. Last updated 2026-11-03.</p>
+  <p class="lede">A chapter per lab session. What you built, what broke, and what Azure was actually doing underneath. Repo: <code>azure-landing-zone-lab</code>. Last updated 2026-11-04.</p>
 </header>
 
 <nav class="toc">
@@ -165,6 +165,8 @@ footer { margin-top: 60px; padding-top: 16px; border-top: 1px solid var(--line);
     <li><a href="#ch20">2.0 - Scopes, management groups and CAF</a> <span class="status done">concepts</span></li>
     <li><a href="#ch21">2.1 - Policy deny, in isolation</a> <span class="status done">done</span></li>
     <li><a href="#ch22">2.2 - Guardrails on the landing zone</a> <span class="status done">done</span></li>
+    <li><a href="#ch40">4.0 - Remote state and plan on PR</a> <span class="status done">done</span></li>
+    <li><a href="#ch3a">3A - One module, many spokes</a> <span class="status done">done</span></li>
     <li><a href="#gotchas">Things that tripped me up</a></li>
     <li><a href="#state">Where the lab stands right now</a></li>
   </ol>
@@ -190,6 +192,8 @@ footer { margin-top: 60px; padding-top: 16px; border-top: 1px solid var(--line);
 <tr><td>5</td><td>Architecture diagram and design decisions</td><td>Reference architectures</td></tr>
 <tr><td>6</td><td>"How a new app team gets a spoke"</td><td>Standards, mentoring</td></tr>
 </table></div>
+
+<p>Phase 4 was built before Phase 3. The module refactor needed a CI plan to prove it changed nothing, so the pipeline had to exist first.</p>
 
 <p>Address plan: hub <code>10.60.0.0/16</code>, spoke 1 <code>10.61.0.0/16</code>, spoke 2 <code>10.62.0.0/16</code>. Chosen to avoid <code>10.50.0.0/16</code>, which the APIM lab uses.</p>
 
@@ -460,7 +464,7 @@ A subscription that's ready before the app team arrives: already in the right fo
 <tr><td>Management</td><td><code>management</code></td><td>Platform ops</td></tr>
 <tr><td>Each landing zone</td><td><code>landing-zones/&lt;team&gt;</code></td><td>Platform creates, app team builds inside</td></tr>
 </table></div>
-<p>Separate state, separate pipeline, separate least-privilege identity. Blast radius stays small. This repo already splits <code>governance</code>, <code>lab</code> and <code>probes</code>. The Phase 3 refactor will split <code>lab</code> into <code>connectivity</code> and <code>landing-zones/spoke1</code>, <code>spoke2</code>, both calling a shared spoke module. Producing new landing zones from a standard module is called <strong>subscription vending</strong>. Microsoft's own Terraform for the full tree is Azure Landing Zones (ALZ), now moving into Azure Verified Modules.</p>
+<p>Separate state, separate pipeline, separate least-privilege identity. Blast radius stays small. This repo already splits <code>governance</code>, <code>lab</code> and <code>probes</code>. Phase 3A moved the spokes into a shared module inside <code>lab</code> (chapter 3A). Phase 3B will split <code>lab</code> into <code>connectivity</code> and <code>landing-zones/spoke1</code>, <code>spoke2</code>, both calling that module. Producing new landing zones from a standard module is called <strong>subscription vending</strong>. Microsoft's own Terraform for the full tree is Azure Landing Zones (ALZ), now moving into Azure Verified Modules.</p>
 
 <div class="interview"><span class="label">Interview line</span>
 <p>"Management groups are folders above subscriptions. Policy and RBAC assigned there are inherited, and a child can't override a parent's Deny. CAF separates Platform (Connectivity, Identity, Management) from Landing Zones (Corp, Online), and I structure Terraform the same way: separate roots and pipelines per piece, with new landing zones vended from a standard spoke module."</p>
@@ -594,6 +598,171 @@ Enforcement happens at each PUT, instantly. Compliance reporting is a separate, 
 <p>"I assigned three built-in policies to the landing zone RGs: allowed locations, required managed_by tag, and not-allowed resource types for public IPs, with the hub exempt from the last one. Then I tested five creates, each breaking exactly one rule, plus two that should pass. All three violations were denied with my custom non-compliance message, and both controls were allowed. In production I'd assign at the management group, so every new subscription inherits them automatically."</p>
 </div>
 
+<!-- ============================================================ CH 4.0 -->
+<div class="chapno" id="ch40">CHAPTER 4.0</div>
+<h2>Remote state and plan on PR <span class="status done">done</span></h2>
+
+<div class="story">
+<p>You open your first pull request. GitHub starts a fresh Linux runner, checks out your code and runs <code>terraform plan</code>. It looks at Azure and sees ten resources. It checks its memory and finds nothing. Plan: 10 to add.</p>
+<p>The runner isn't wrong. It just never saw the state file sitting on your laptop.</p>
+</div>
+
+<h3>Why local state stops working</h3>
+<p>State is Terraform's memory. It's how Terraform knows "these ten Azure resources are mine, and this is what they looked like last time." It never goes into git, because it changes on every apply and can hold secrets. So while it lives on your laptop, only your laptop can plan correctly.</p>
+<p>The fix is to keep it somewhere both your laptop and the runner can reach. In Azure, that's a blob.</p>
+
+<h3>The bootstrap root</h3>
+<p>The storage has to exist before any root can keep state in it. And it can't keep its own state inside itself. So it gets a tiny root of its own, <code>terraform/bootstrap</code>, whose state stays local forever. You run it once and rarely again. 4 resources.</p>
+<div class="table-wrap"><table>
+<tr><th>Resource</th><th>Setting</th><th>Why</th></tr>
+<tr><td><code>rg-tfstate-cac</code></td><td>Its own RG</td><td>Destroying the lab never destroys its memory</td></tr>
+<tr><td><code>sttfstatecacce88c0</code></td><td>Blob versioning, 7-day soft delete</td><td>The undo button if a state file gets corrupted</td></tr>
+<tr><td></td><td>Shared keys off, TLS 1.2, no public blobs</td><td>Every access is a named identity with a role</td></tr>
+<tr><td><code>tfstate</code> container</td><td>One blob per root: <code>lab.tfstate</code>, <code>governance.tfstate</code></td><td>One container, one RBAC scope</td></tr>
+<tr><td>Role assignment</td><td>You: Storage Blob Data Contributor on the container</td><td>See below</td></tr>
+</table></div>
+
+<div class="callout key"><span class="label">Control plane vs data plane</span>
+You're Owner on the subscription. Owner lets you create and configure the storage account. It does <strong>not</strong> let you read a blob inside it. That's the data plane, and it has its own roles. With shared keys off, a data role is the only way in. Without it, <code>migrate-state</code> fails with a 403 even though you "own everything."
+</div>
+
+<h3>Moving the memory</h3>
+<p>Each root got a <code>backend.tf</code>: same account, same container, different <code>key</code>. Plus <code>use_azuread_auth = true</code>, or Terraform goes looking for a storage key that no longer exists. Then <code>terraform init -migrate-state</code>. It asks before it copies, and it wants the full word <code>yes</code>. Type <code>y</code> and it just asks again.</p>
+<p>"Successfully configured" only means the copy didn't error. So three checks per root:</p>
+<div class="table-wrap"><table>
+<tr><th>Check</th><th>lab</th><th>governance</th></tr>
+<tr><td>Items in state</td><td>10</td><td>14</td></tr>
+<tr><td>Lineage, backup vs blob</td><td><code>afad2e83...</code> both</td><td><code>d605d062...</code> both</td></tr>
+<tr><td>Serial, backup to blob</td><td>14 to 15</td><td>9 to 10</td></tr>
+<tr><td>Plan</td><td class="pass">No changes</td><td class="pass">No changes</td></tr>
+</table></div>
+<p><strong>Lineage</strong> is the state file's identity, stamped once when it's first created. <strong>Serial</strong> counts writes. Copying into the new backend was one more write, so serial went up by one. Same identity, one version newer.</p>
+<p>The local <code>terraform.tfstate</code> was left behind as a 0-byte file. That's deliberate. A full leftover copy could be picked up by mistake later, so Terraform empties it once the remote copy is in charge.</p>
+<p>Something new showed up too: <code>Acquiring state lock</code>. The backend takes a lease on the blob while Terraform works, so you and CI can't write at the same moment. Local state never protected you from that.</p>
+
+<h3>How the runner logs in without a secret</h3>
+<figure>
+<svg viewBox="0 0 840 270" role="img" aria-label="GitHub runner swaps an OIDC token at Entra ID, then reads Azure resources and the state blob">
+  <rect class="box" x="20" y="100" width="200" height="70" rx="6"/>
+  <text class="t-b" x="120" y="130" text-anchor="middle">GitHub runner</text>
+  <text class="t-m" x="120" y="152" text-anchor="middle">pull_request run</text>
+  <rect class="box-accent" x="600" y="15" width="220" height="64" rx="6"/>
+  <text class="t-b" x="710" y="42" text-anchor="middle">Entra ID</text>
+  <text class="t-m" x="710" y="63" text-anchor="middle">federated credential</text>
+  <rect class="box" x="600" y="103" width="220" height="64" rx="6"/>
+  <text class="t-b" x="710" y="130" text-anchor="middle">Resource Manager</text>
+  <text class="t-m" x="710" y="151" text-anchor="middle">Reader on 3 RGs</text>
+  <rect class="box" x="600" y="191" width="220" height="64" rx="6"/>
+  <text class="t-b" x="710" y="218" text-anchor="middle">tfstate container</text>
+  <text class="t-m" x="710" y="239" text-anchor="middle">Blob Data Contributor</text>
+  <line class="ln-acc" x1="220" y1="135" x2="600" y2="47"/>
+  <line class="ln-acc" x1="220" y1="135" x2="600" y2="135"/>
+  <line class="ln-acc" x1="220" y1="135" x2="600" y2="223"/>
+  <text class="t-m" x="410" y="76" text-anchor="middle">1  OIDC token in, Azure token out</text>
+  <text class="t-m" x="410" y="125" text-anchor="middle">2  refresh resources, GET only</text>
+  <text class="t-m" x="410" y="205" text-anchor="middle">3  read state, take lock lease</text>
+</svg>
+<figcaption>No secret is stored anywhere. Every token lives for one run.</figcaption>
+</figure>
+<p>The old way was a service principal with a client secret pasted into GitHub. That secret lives forever, leaks, and expires at the worst moment. With OIDC, GitHub issues a short-lived token on every run that describes the run. Entra trusts it only if its subject matches a federated credential you set up in advance. Terraform does the swap itself (<code>ARM_USE_OIDC=true</code>), so there's no <code>azure/login</code> step.</p>
+<pre><code>repo:KSAShoukathAli@275120224/azure-landing-zone-lab@1443587946:pull_request</code></pre>
+<p>The two numbers are the owner ID and the repo ID. Since July 15, 2026, GitHub puts them in the subject for every new or renamed repo. The old subject trusted a <em>name</em>, and names get reused: delete a repo, someone creates one with the same name, and their workflow matches your trust. IDs are never reused. A name-only subject on this repo would fail with an AADSTS "no matching federated identity" error. Helpfully, that error shows the subject GitHub actually sent.</p>
+<p>The <code>:pull_request</code> ending means only PR runs get this identity. A push to main can't. That's on purpose. This is the plan identity, and apply gets its own identity and subject later.</p>
+<div class="table-wrap"><table>
+<tr><th>Role</th><th>Scope</th><th>Why</th></tr>
+<tr><td>Reader</td><td>each <code>rg-hubspoke-*</code> RG</td><td>Plan refreshes resources. Reading is all it needs.</td></tr>
+<tr><td>Storage Blob Data Contributor</td><td><code>tfstate</code> container only</td><td>Read state, and take the lock lease. Plan writes a lease, so read-only isn't enough.</td></tr>
+</table></div>
+<p>Nothing at subscription scope. Governance was the open question: it looks up three built-in policy definitions at <code>/providers/Microsoft.Authorization/...</code>, outside any RG. CI read them fine with RG-level Reader.</p>
+<p>Client ID, tenant ID and subscription ID are GitHub <strong>variables</strong>, not secrets. They're identifiers. Without a matching GitHub token they open nothing.</p>
+
+<div class="callout key"><span class="label">App registration or managed identity</span>
+The identity was built as an app registration, <code>gh-azure-landing-zone-lab-plan</code>. A user-assigned managed identity takes the same federated credential and fits better. It can't hold a secret at all, so OIDC is the only way in. It lives in an RG and is governed like any resource. And plain <code>azurerm</code> Terraform can create it. Swapping later changes one GitHub variable.
+</div>
+
+<h3>The workflow</h3>
+<p><code>.github/workflows/terraform-plan.yml</code> runs on <code>pull_request</code>, never <code>pull_request_target</code>, which runs with the base repo's privileges against code from a fork. It plans <code>lab</code> and <code>governance</code> side by side, with Terraform pinned to 1.15.8, the same as your laptop. Permissions are <code>contents: read</code> and <code>id-token: write</code>. That second one is what lets the job ask GitHub for a token at all.</p>
+<p>Two changes went in before the first run:</p>
+<ul>
+<li><code>resource_provider_registrations = "none"</code> in both provider blocks. By default azurerm registers resource providers at subscription scope on every run, and an RG-scoped Reader can't do that. It changes provider startup, not resources: both local plans stayed No changes.</li>
+<li>Linux hashes in the lock files, with <code>terraform providers lock -platform=linux_amd64 -platform=windows_amd64</code>. The lock files were made on Windows. The runner is Linux.</li>
+</ul>
+
+<h3>Evidence</h3>
+<pre><code>PR #1  phase4-ci-plan
+plan (lab)          pass  23s  No changes. Your infrastructure matches the configuration.
+plan (governance)   pass  25s  No changes. Your infrastructure matches the configuration.</code></pre>
+
+<div class="callout warn"><span class="label">Green is not No changes</span>
+The plan step passes on exit code 2, "changes detected," because a PR that changes infrastructure is normal. It only fails when the plan itself breaks. So a green check tells you the plan ran. To know what it found, read the <code>Plan:</code> line. Same lesson as Network Watcher in 1.3.
+</div>
+
+<div class="interview"><span class="label">Interview line</span>
+<p>"I moved state to a storage account created by a separate bootstrap root, with versioning on and shared keys off, so every access is a named identity with a data plane role. Owner on the subscription isn't enough to read blobs. CI authenticates with GitHub OIDC, no secrets, using the immutable subject with owner and repo IDs, and only for pull_request runs. The plan identity has Reader on the three landing zone RGs and Blob Data Contributor on the state container, nothing at subscription scope. The first PR planned both roots with No changes, which proved the migrated state and the CI identity see the same world I do."</p>
+</div>
+
+<!-- ============================================================ CH 3A -->
+<div class="chapno" id="ch3a">CHAPTER 3A</div>
+<h2>One module, many spokes <span class="status done">done</span></h2>
+
+<div class="story">
+<p>An app team asks for a landing zone. You open <code>main.tf</code>, copy the four spoke 2 blocks, rename them to spoke 3, change the CIDR. You miss one line: the spoke-side <code>allow_forwarded_traffic</code>.</p>
+<p>Everything deploys. Spoke-to-spoke traffic dies quietly at gate 4, and nobody finds out until the app team files a ticket.</p>
+</div>
+
+<p>3A moves everything a spoke needs into one module, <code>terraform/modules/spoke-network</code>, and calls it with <code>for_each</code>. The module can't forget a setting, because each setting is written exactly once.</p>
+
+<h3>What's in the module</h3>
+<div class="table-wrap"><table>
+<tr><th>Resource</th><th>Lives on</th><th>Note</th></tr>
+<tr><td><code>azurerm_resource_group.this</code></td><td>spoke</td><td><code>rg-hubspoke-&lt;name&gt;-cac</code></td></tr>
+<tr><td><code>azurerm_virtual_network.this</code></td><td>spoke</td><td><code>vnet-&lt;name&gt;-cac</code></td></tr>
+<tr><td>peering <code>hub_to_spoke</code></td><td>hub VNet</td><td><code>allow_forwarded_traffic = false</code></td></tr>
+<tr><td>peering <code>spoke_to_hub</code></td><td>spoke VNet</td><td>forwarded traffic on by default; waits for <code>hub_to_spoke</code></td></tr>
+</table></div>
+<p>Both halves of the handshake are in the module, including the one that lives on the hub. One module call, one fully connected landing zone. That's how vending modules work. The cost shows up in 3B: each landing zone root will need write access on the hub VNet.</p>
+<pre><code>spokes = {
+  spoke1 = { address_space = ["10.61.0.0/16"] }
+  spoke2 = { address_space = ["10.62.0.0/16"] }
+}</code></pre>
+<p>Spoke 3 is one more line.</p>
+
+<h3>for_each, and a hub that can't do two things at once</h3>
+<p>The first draft called the module twice, <code>spoke1</code> and <code>spoke2</code>, with <code>depends_on</code> chaining them. It worked. But it copy-pasted the call site, which is the exact thing vending is supposed to remove.</p>
+<p>The reason was the hub. Every spoke adds a peering on the hub VNet, and Azure rejects overlapping peering changes on one VNet. That's <code>AnotherOperationInProgress</code> from 1.1. And one instance of a <code>for_each</code> module can't depend on another instance.</p>
+<p>The answer turned out to be a rule, not a chain. One new landing zone per PR, so only one instance changes at a time, and inside it <code>spoke_to_hub</code> already waits for <code>hub_to_spoke</code>. A full rebuild from scratch runs <code>apply -parallelism=1</code>.</p>
+
+<h3>Moving without destroying</h3>
+<p>Terraform tracks resources by address. Moving code into a module changes the address: <code>azurerm_virtual_network.spoke1</code> becomes <code>module.spoke["spoke1"].azurerm_virtual_network.this</code>. Without help, Terraform sees one address vanish and another appear, and plans to destroy the VNet and create it again. Peerings gone. The probes subnets inside it, gone with it.</p>
+<p>A <code>moved</code> block says: same object, new address. Eight of them, in <code>envs/lab/moved.tf</code>:</p>
+<pre><code>moved {
+  from = azurerm_virtual_network.spoke1
+  to   = module.spoke["spoke1"].azurerm_virtual_network.this
+}</code></pre>
+<p>The success test was set before writing any code: <strong>0 to add, 0 to change, 0 to destroy</strong>, with moves allowed. Any "to change" would mean the module differs from the real resource. So the tags had to stay exactly the same, <code>phase = "01"</code> included.</p>
+
+<h3>Evidence</h3>
+<pre><code># azurerm_virtual_network.spoke1 has moved to module.spoke["spoke1"].azurerm_virtual_network.this
+  ... 8 moves in total
+Plan: 0 to add, 0 to change, 0 to destroy.
+
+PR #2  plan (lab) pass, plan (governance) pass
+
+terraform apply "phase3a-moves.tfplan"
+Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
+
+terraform state list   10 items: 2 hub + 8 under module.spoke["spoke1"] and ["spoke2"]
+terraform plan         No changes.</code></pre>
+<p>CI only plans, so until the merge the moves existed only in plans. One local apply rewrote the addresses in <code>lab.tfstate</code>. It read Azure, but it sent no create, update or delete. The outputs came back identical: same names, same address spaces, same four peerings. <code>moved.tf</code> stays in the repo as a record of where these resources came from.</p>
+
+<div class="callout key"><span class="label">What 3B adds</span>
+3A kept everything in one root. 3B splits <code>lab</code> into <code>connectivity</code> (the hub) and one root per landing zone, all calling this module. Then resources move between <em>state files</em>, which <code>moved</code> can't do. That's <code>removed</code> blocks in the old root and <code>import</code> blocks in the new one.
+</div>
+
+<div class="interview"><span class="label">Interview line</span>
+<p>"The spoke module is called with for_each over a map, so a new landing zone is one map entry in one PR. Every spoke adds a peering on the hub VNet, and Azure rejects overlapping peering changes, so the rule is one new spoke per PR, and a full rebuild runs with parallelism 1. I moved the existing spokes in with moved blocks. The plan showed eight moves and 0 to add, change or destroy, and after apply the plan was clean again."</p>
+</div>
+
 <!-- ============================================================ GOTCHAS -->
 <div class="chapno" id="gotchas">FIELD NOTES</div>
 <h2>Things that tripped me up</h2>
@@ -613,6 +782,16 @@ Enforcement happens at each PUT, instantly. Compliance reporting is a separate, 
 <tr><td>Risk: az calls built from <code>$args</code> misbehave</td><td><code>$args</code> is a reserved PowerShell variable</td><td>Use another name, like <code>$azArgs</code></td></tr>
 <tr><td>Terraform error says "updating" for a brand-new resource</td><td>Azure uses one PUT (<code>CreateOrUpdate</code>) for both</td><td>Ignore the verb. Read the error code.</td></tr>
 <tr><td>Compliance page says "Not started" right after assigning</td><td>Compliance runs on a separate, slower scan</td><td>Enforcement is already live. Test with a create.</td></tr>
+<tr><td><code>migrate-state</code> asked the same question twice</td><td>Typed <code>y</code>. Terraform only accepts the full word</td><td>Type <code>yes</code></td></tr>
+<tr><td>Local <code>terraform.tfstate</code> is 0 bytes after migrating</td><td>By design. Terraform empties it so a stale copy can't be used</td><td>Compare lineage against your backup instead</td></tr>
+<tr><td>Serial one higher in the blob than in the backup</td><td>Copying into the backend is a write</td><td>Lineage is the identity check. Serial only counts writes.</td></tr>
+<tr><td>Name-only OIDC subject would never match this repo</td><td>Repos created after July 15, 2026 get owner and repo IDs in the <code>sub</code> claim</td><td>Get the IDs with <code>gh api repos/&lt;owner&gt;/&lt;repo&gt;</code>. Subject: <code>repo:owner@id/repo@id:pull_request</code></td></tr>
+<tr><td><code>gh pr create</code>: "No commits between main and the branch"</td><td>The script that makes the changes was created but never run</td><td>Check <code>git log origin/main</code> and <code>git ls-files</code> before opening a PR</td></tr>
+<tr><td>Commit landed on <code>main</code> instead of the branch</td><td>Branch step skipped</td><td><code>git checkout -b &lt;branch&gt;</code>, then <code>git branch -f main origin/main</code></td></tr>
+<tr><td>CI check green, but was the plan clean?</td><td>The plan step passes on exit code 2 by design</td><td>Read the <code>Plan:</code> line in the log or the run summary</td></tr>
+<tr><td><code>terraform fmt -recursive ..\..</code> reformatted another root's tfvars</td><td>Recursive fmt walks every root in the repo</td><td>Only fmt the folders you're changing</td></tr>
+<tr><td>Module call: "An argument named name is not expected here"</td><td>The module had no <code>variables.tf</code>. Its files were never written</td><td>Check the module folder before <code>init</code></td></tr>
+<tr><td>Log search matched timestamps and Node warnings</td><td><code>Select-String</code> is case-insensitive, and "403" hides inside timestamps</td><td><code>-CaseSensitive</code> and specific patterns like <code>Plan: </code></td></tr>
 </table></div>
 
 <!-- ============================================================ STATE -->
@@ -620,18 +799,22 @@ Enforcement happens at each PUT, instantly. Compliance reporting is a separate, 
 <h2>Where the lab stands right now</h2>
 <div class="table-wrap"><table>
 <tr><th>Root</th><th>Deployed</th><th>Notes</th></tr>
-<tr><td><code>envs/lab</code></td><td>3 RGs, 3 VNets, 4 peerings</td><td>Spoke-side <code>allow_forwarded_traffic = true</code> (Stage 2)</td></tr>
-<tr><td><code>envs/probes</code></td><td>3 subnets, 3 NICs, 3 VMs, 2 UDRs</td><td>Hub NIC IP forwarding on. VMs deallocated to save cost.</td></tr>
+<tr><td><code>terraform/bootstrap</code></td><td>1 RG, 1 storage account, 1 container, 1 role assignment</td><td>Phase 4. Local state, by design. Versioning on, shared keys off.</td></tr>
+<tr><td><code>envs/lab</code></td><td>3 RGs, 3 VNets, 4 peerings</td><td>Remote state (<code>lab.tfstate</code>). Spokes via <code>module.spoke</code> with <code>for_each</code> (3A). Spoke-side <code>allow_forwarded_traffic = true</code> (Stage 2).</td></tr>
+<tr><td><code>envs/probes</code></td><td>3 subnets, 3 NICs, 3 VMs, 2 UDRs</td><td>Local state. Hub NIC IP forwarding on. VMs deallocated to save cost.</td></tr>
 <tr><td>Hub VM guest OS</td><td><code>ip_forward = 1</code> persisted</td><td>iptables allow rules are lost on restart. Rerun <code>Enable-GuestForwarding.ps1</code> if pings fail. Configured is not the same as reproducibly configured: in production this belongs in cloud-init or config management.</td></tr>
 <tr><td><code>envs/policy-lab/governance</code></td><td>1 RG, 1 custom definition, 1 assignment</td><td>Phase 2.1 done. Costs nothing. Destroy any time.</td></tr>
 <tr><td><code>envs/policy-lab/workload</code></td><td>nothing (create was denied)</td><td>State holds only the data source.</td></tr>
-<tr><td><code>envs/governance</code></td><td>8 policy assignments</td><td>Phase 2.2 done, 5/5 tests pass. Every future create or update in the hub-spoke RGs is now checked. Existing probes resources all comply.</td></tr>
+<tr><td><code>envs/governance</code></td><td>8 policy assignments</td><td>Remote state (<code>governance.tfstate</code>). Phase 2.2 done, 5/5 tests pass. Every future create or update in the hub-spoke RGs is now checked. Existing probes resources all comply.</td></tr>
+<tr><td>CI plan identity</td><td>App registration <code>gh-azure-landing-zone-lab-plan</code>, 1 federated credential, 4 roles</td><td><code>pull_request</code> subject only. No apply identity yet.</td></tr>
+<tr><td><code>.github/workflows/terraform-plan.yml</code></td><td>Plan on PR for lab and governance</td><td>No apply in CI. Apply is still local.</td></tr>
 </table></div>
 
+<p><strong>Next:</strong> 3B (split <code>lab</code> into connectivity and per-landing-zone roots with <code>removed</code> and <code>import</code>), an apply identity on main, and the swap to a user-assigned managed identity.</p>
 <p><strong>To resume spoke-to-spoke testing:</strong> start the three VMs, rerun <code>Enable-GuestForwarding.ps1</code>, then <code>Test-Phase3Packets.ps1</code>.</p>
 <p><strong>To undo Phase 1.3:</strong> <code>Set-Phase3Stage.ps1 -Stage 0</code>, apply <code>probes</code> first, then <code>lab</code>.</p>
 <p><strong>To remove the guardrails:</strong> <code>terraform destroy</code> in <code>envs/governance</code>. It removes the 8 assignments only.</p>
-<p><strong>Destroy order for the whole lab:</strong> policy-lab workload, policy-lab governance, governance, then probes, then lab. Never destroy <code>lab</code> while <code>probes</code> still has subnets in its VNets.</p>
+<p><strong>Destroy order for the whole lab:</strong> policy-lab workload, policy-lab governance, governance, then probes, then lab. Never destroy <code>lab</code> while <code>probes</code> still has subnets in its VNets. <code>terraform/bootstrap</code> goes last, after every root that keeps state in it.</p>
 
 <footer>Azure Landing Zone Lab journal. Built with ChatGPT and Claude, verified in a Visual Studio MSDN subscription, Canada Central.</footer>
 
