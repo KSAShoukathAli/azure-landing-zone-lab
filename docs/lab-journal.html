@@ -163,8 +163,8 @@ footer { margin-top: 60px; padding-top: 16px; border-top: 1px solid var(--line);
     <li><a href="#ch12">1.2 - Where does the packet go?</a> <span class="status done">done</span></li>
     <li><a href="#ch13">1.3 - A route is not a router</a> <span class="status done">done</span></li>
     <li><a href="#ch20">2.0 - Scopes, management groups and CAF</a> <span class="status done">concepts</span></li>
-    <li><a href="#ch21">2.1 - Policy deny, in isolation</a> <span class="status next">next</span></li>
-    <li><a href="#ch22">2.2 - Guardrails on the landing zone</a> <span class="status next">planned</span></li>
+    <li><a href="#ch21">2.1 - Policy deny, in isolation</a> <span class="status done">done</span></li>
+    <li><a href="#ch22">2.2 - Guardrails on the landing zone</a> <span class="status done">done</span></li>
     <li><a href="#gotchas">Things that tripped me up</a></li>
     <li><a href="#state">Where the lab stands right now</a></li>
   </ol>
@@ -468,27 +468,73 @@ A subscription that's ready before the app team arrives: already in the right fo
 
 <!-- ============================================================ CH 2.1 -->
 <div class="chapno" id="ch21">CHAPTER 2.1</div>
-<h2>Policy deny, in isolation <span class="status next">next</span></h2>
+<h2>Policy deny, in isolation <span class="status done">done</span></h2>
 
 <div class="story">
 <p>Your deployment identity is Contributor. RBAC says yes. Terraform plan is green. You apply, and Azure says no. How?</p>
 </div>
 
-<p>Built with ChatGPT. Roots: <code>terraform/envs/policy-lab/governance</code> (throwaway RG, a <strong>custom</strong> policy definition that denies public IPs, and its assignment) and <code>terraform/envs/policy-lab/workload</code> (tries to create a public IP in that RG). Nothing touches the hub-and-spoke network.</p>
+<p>Designed with ChatGPT, run with Claude. Two roots with separate state, playing two different owners. Nothing touches the hub-and-spoke network.</p>
+
+<h3>What got built</h3>
+<div class="table-wrap"><table>
+<tr><th>Root</th><th>Plays</th><th>Owns</th><th>Result</th></tr>
+<tr><td><code>policy-lab/governance</code></td><td>Platform team</td><td><code>rg-policy-deny-lab-cac</code>, a <strong>custom</strong> definition <code>deny-public-ip-policy-lab</code> (subscription scope), its assignment <code>deny-public-ip-lab</code> (RG scope)</td><td>3 added</td></tr>
+<tr><td><code>policy-lab/workload</code></td><td>App team</td><td>A <code>data</code> block reading the RG, one Standard public IP <code>pip-should-be-denied-cac</code></td><td>Plan 1 to add. Apply 403.</td></tr>
+</table></div>
+<p>The RG took 24 seconds. The definition and the assignment took about 1.5 minutes each. Policy objects are replicated globally, and Azure waits until they're visible everywhere before calling them done.</p>
+
+<h3>Definition vs assignment</h3>
+<p>A <strong>definition</strong> is the rule. Yours is tiny: <em>if</em> type is public IP, <em>then</em> deny. An <strong>assignment</strong> puts that rule on one scope and makes it live. Think of a rule in a library and a sign on a door. One rule, many doors.</p>
+<div class="table-wrap"><table>
+<tr><th>Object</th><th>Can live at</th></tr>
+<tr><td>Definition</td><td>Management group or subscription. Never a resource group.</td></tr>
+<tr><td>Assignment</td><td>Management group, subscription, resource group, even one resource. Must be at or below its definition.</td></tr>
+</table></div>
+<p>Two settings decide what an assignment actually does. <code>enforcementMode</code> (Terraform calls it <code>enforce</code>) decides whether it runs. The <strong>effect</strong> in the definition decides what it does. The subscription already carried Microsoft's <code>ASC Default</code> initiative, also enforced. It blocks nothing because its effects only audit.</p>
+
+<h3>Plan only reads. Policy only judges writes.</h3>
+<p>Here's everything <code>terraform plan</code> does: read your <code>.tf</code> files, read state, send GETs to refresh what exists, compare, print. It never sends the PUT that says "create this." Azure Policy lives inside Resource Manager and checks each PUT as it arrives. No PUT, no policy check.</p>
+<p>It has nothing to do with whether the resource is in state. Change an existing resource in a way the policy dislikes, and plan is still green. Apply still fails.</p>
 <div class="table-wrap"><table>
 <tr><th>Control</th><th>Question it answers</th><th>Checked when</th></tr>
 <tr><td>RBAC</td><td>Is this identity allowed to do this action?</td><td>Every request</td></tr>
 <tr><td>Azure Policy</td><td>Is this resource allowed to exist, in this shape, here?</td><td>When Resource Manager receives the create or update</td></tr>
 </table></div>
-<p>Expected: <code>terraform plan</code> succeeds because plan never asks Azure Policy. <code>terraform apply</code> fails with <code>RequestDisallowedByPolicy</code>. A green plan doesn't mean the deployment is allowed.</p>
-<p>New terms: a <strong>definition</strong> is the rule (lives at subscription or management group). An <strong>assignment</strong> applies a definition to a scope.</p>
 
+<h3>Evidence</h3>
+<pre><code>Plan: 1 to add, 0 to change, 0 to destroy.
+
+azurerm_public_ip.should_be_denied: Creating...
+Error: performing CreateOrUpdate: unexpected status 403 (403 Forbidden)
+  RequestDisallowedByPolicy: Resource 'pip-should-be-denied-cac'
+  was disallowed by policy.
+  policyAssignment: Deny Public IP - Policy Lab
+  policyDefinition: Deny Public IP - Isolated Lab
+
+Public IPs in rg-policy-deny-lab-cac:  none
+Terraform state:  data.azurerm_resource_group.policy_lab  (only)</code></pre>
+<p>The error names the exact assignment and definition, with full IDs. Nobody has to guess which rule fired, or at which scope. And the refused PUT left nothing behind, not even a half-made resource.</p>
+
+<div class="callout key"><span class="label">Reading a 403</span>
+<code>403 + RequestDisallowedByPolicy</code> means policy. <code>403 + AuthorizationFailed</code> means RBAC. Same HTTP status, different gate. Read the error code before blaming permissions.
+</div>
+
+<p>Catching it earlier: in a pipeline, export the plan with <code>terraform show -json</code> and check it with Checkov or OPA, so the failure shows up on the pull request. Azure Policy stays the final gate, because the person clicking in the portal never goes through your pipeline.</p>
+
+<div class="interview"><span class="label">Interview line</span>
+<p>"I assigned a custom Deny policy to a resource group, then had a separate Terraform root try to create a public IP there. Plan was green, because plan only reads and policy only judges writes. Apply got a 403 RequestDisallowedByPolicy naming the exact assignment, and nothing was created. A green plan proves the config is valid, not that it's allowed."</p>
+</div>
+
+<!-- ============================================================ CH 2.2 -->
 <div class="chapno" id="ch22">CHAPTER 2.2</div>
-<h2>Guardrails on the landing zone <span class="status next">planned</span></h2>
+<h2>Guardrails on the landing zone <span class="status done">done</span></h2>
 
 <div class="story">
 <p>Friday afternoon. Someone opens the portal and creates a public IP in spoke 1, in East US, with no tags. Monday, security finds an internet-facing endpoint that bypasses the hub, in a region you don't support, owned by nobody.</p>
 </div>
+
+<p>2.1 asked whether Azure Policy works. 2.2 asks which rules a real landing zone needs, and puts them on your actual hub and spokes. Three problems in that story, one rule each.</p>
 
 <p>Root: <code>terraform/envs/governance</code>. Owns only policy assignments, so destroy removes only the guardrails.</p>
 <div class="table-wrap"><table>
@@ -499,22 +545,53 @@ A subscription that's ready before the app team arrives: already in the right fo
 </table></div>
 <p>8 assignments, all Deny. Resource group scope because the MSDN subscription is shared with other labs. In production: management group scope. The hub is exempt from the public IP ban, which is the CAF Connectivity versus Corp split in miniature. The tag is <code>managed_by</code>, which every Terraform resource here already carries.</p>
 
-<h3>Planned tests</h3>
+<h3>You don't write the rules</h3>
+<p>In 2.1 you wrote a definition. Here you don't. Microsoft ships these as <strong>built-in</strong> definitions, and you look them up by fixed GUID. Each one is a blank form. "Allowed locations" says <em>only allow these regions: ____</em>. You fill the blank with a <strong>parameter</strong> when you assign it.</p>
 <div class="table-wrap"><table>
-<tr><th>Test</th><th>Attempt</th><th>Expected</th></tr>
-<tr><td>A</td><td>Route table in eastus</td><td>DENIED</td></tr>
-<tr><td>B</td><td>Route table, no tags</td><td>DENIED</td></tr>
-<tr><td>C</td><td>Public IP in spoke 1</td><td>DENIED</td></tr>
-<tr><td>D</td><td>Route table, right region and tag</td><td>ALLOWED</td></tr>
-<tr><td>E</td><td>Public IP in the hub</td><td>ALLOWED</td></tr>
+<tr><th>Built-in</th><th>Parameter</th><th>Value</th></tr>
+<tr><td>Allowed locations</td><td><code>listOfAllowedLocations</code></td><td><code>["canadacentral"]</code></td></tr>
+<tr><td>Require a tag on resources</td><td><code>tagName</code></td><td><code>managed_by</code></td></tr>
+<tr><td>Not allowed resource types</td><td><code>listOfResourceTypesNotAllowed</code></td><td><code>["Microsoft.Network/publicIPAddresses"]</code></td></tr>
+</table></div>
+<p>Look at the IDs side by side. Yours: <code>/subscriptions/ce88.../policyDefinitions/deny-public-ip-policy-lab</code>. Built-in: <code>/providers/Microsoft.Authorization/policyDefinitions/e56962a6-...</code>. No subscription in it. It belongs to Azure itself and every subscription can see it.</p>
+<p>Terraform: one <code>for_each</code> block per guardrail makes one assignment per RG. The public IP block filters out the hub with <code>if k != "hub"</code>. Each assignment carries a <code>non_compliance_message</code>, so a blocked person reads "deploy only to canadacentral" instead of a bare policy ID.</p>
+
+<h3>Before applying: what already exists</h3>
+<p>A read-only check listed every resource in the three RGs against the three rules. 14 resources: 3 VNets, 3 NICs, 3 VMs, 3 OS disks, 2 route tables. <strong>All 14 passed.</strong></p>
+<p>The disks were the interesting ones. Terraform never created them. It asked for a VM, and Azure made the disk as a side effect. They still carry <code>managed_by</code>, because the VM's tags were carried onto the disk at creation.</p>
+<p>Subnets, peerings and routes didn't appear at all. They're child resources and can't hold tags. The tag policy skips anything untaggable, or nobody could ever create a subnet.</p>
+
+<h3>Assignments, as Azure sees them</h3>
+<pre><code>rg-hubspoke-hub-cac      lz-allowed-locations-hub, lz-require-tag-hub
+rg-hubspoke-spoke1-cac   + lz-deny-public-ip-spoke1   (3)
+rg-hubspoke-spoke2-cac   + lz-deny-public-ip-spoke2   (3)</code></pre>
+<p>The 2-3-3 split is the hub exemption, confirmed by Azure rather than by the Terraform file.</p>
+
+<h3>Tests</h3>
+<p>Each test breaks exactly one rule, so a denial can only come from one place. D and E are the controls. They prove the guardrails don't block normal work. Run about 3 minutes after apply; enforcement was already live.</p>
+<div class="table-wrap"><table>
+<tr><th>Test</th><th>Attempt</th><th>Result</th><th>Message Azure returned</th></tr>
+<tr><td>A</td><td>Route table in eastus (tagged)</td><td class="pass">DENIED</td><td>deploy only to canadacentral</td></tr>
+<tr><td>B</td><td>Route table, no tag</td><td class="pass">DENIED</td><td>every resource needs a managed_by tag</td></tr>
+<tr><td>C</td><td>Public IP in spoke 1</td><td class="pass">DENIED</td><td>no public IPs in spokes. Internet traffic goes through the hub.</td></tr>
+<tr><td>D</td><td>Route table, right region and tag</td><td class="pass">ALLOWED</td><td>created, then deleted</td></tr>
+<tr><td>E</td><td>Public IP in the hub</td><td class="pass">ALLOWED</td><td>created, then deleted</td></tr>
 </table></div>
 
-<div class="check"><strong>Answer before applying</strong>
+<div class="check"><strong>The questions, answered</strong>
 <ol>
-<li>Deny is assigned after the VNets and VMs exist. What happens to them?</li>
-<li>Why is the hub allowed public IPs but the spokes are not?</li>
-<li>Terraform resources pass the tag rule. What happens to someone using the portal?</li>
+<li><em>Deny is assigned after the VNets and VMs exist. What happens to them?</em> Nothing. Deny judges requests, not resources. A non-compliant existing resource would only show up on the Compliance page. The next update to it, though, is a PUT, and gets judged.</li>
+<li><em>Why is the hub allowed public IPs but the spokes are not?</em> The hub is the internet edge. Spokes route through it, the same way spoke-to-spoke traffic does in 1.3. Tests C and E show it.</li>
+<li><em>Terraform resources pass the tag rule. What happens to someone using the portal?</em> The portal sends the same PUT. They get test B's denial and test B's message, until they add the tag.</li>
 </ol>
+</div>
+
+<div class="callout key"><span class="label">The idea to keep</span>
+Enforcement happens at each PUT, instantly. Compliance reporting is a separate, slower scan. A Compliance page that says "Not started" doesn't mean the Deny is off. Test with a create.
+</div>
+
+<div class="interview"><span class="label">Interview line</span>
+<p>"I assigned three built-in policies to the landing zone RGs: allowed locations, required managed_by tag, and not-allowed resource types for public IPs, with the hub exempt from the last one. Then I tested five creates, each breaking exactly one rule, plus two that should pass. All three violations were denied with my custom non-compliance message, and both controls were allowed. In production I'd assign at the management group, so every new subscription inherits them automatically."</p>
 </div>
 
 <!-- ============================================================ GOTCHAS -->
@@ -532,6 +609,10 @@ A subscription that's ready before the app team arrives: already in the right fo
 <tr><td>Peering checkbox still unchecked after apply</td><td>Portal cached the old view</td><td>F5. When portal and CLI disagree, trust <code>az</code> or <code>terraform plan</code></td></tr>
 <tr><td>Risk: bash fails on <code>\r</code></td><td>Windows line endings in .sh files</td><td><code>.gitattributes</code>: <code>*.sh text eol=lf</code></td></tr>
 <tr><td>Verify script showed blank IP forwarding</td><td>Field is <code>enableIPForwarding</code>, JMESPath is case-sensitive</td><td>Fixed the field name</td></tr>
+<tr><td>Check script said folders MISSING, but it was looking in Downloads</td><td>Wrong default repo path. <code>Set-Location</code> failed, and PowerShell kept going anyway</td><td>Real path, and <code>Set-Location ... -ErrorAction Stop</code> in every script</td></tr>
+<tr><td>Risk: az calls built from <code>$args</code> misbehave</td><td><code>$args</code> is a reserved PowerShell variable</td><td>Use another name, like <code>$azArgs</code></td></tr>
+<tr><td>Terraform error says "updating" for a brand-new resource</td><td>Azure uses one PUT (<code>CreateOrUpdate</code>) for both</td><td>Ignore the verb. Read the error code.</td></tr>
+<tr><td>Compliance page says "Not started" right after assigning</td><td>Compliance runs on a separate, slower scan</td><td>Enforcement is already live. Test with a create.</td></tr>
 </table></div>
 
 <!-- ============================================================ STATE -->
@@ -542,12 +623,14 @@ A subscription that's ready before the app team arrives: already in the right fo
 <tr><td><code>envs/lab</code></td><td>3 RGs, 3 VNets, 4 peerings</td><td>Spoke-side <code>allow_forwarded_traffic = true</code> (Stage 2)</td></tr>
 <tr><td><code>envs/probes</code></td><td>3 subnets, 3 NICs, 3 VMs, 2 UDRs</td><td>Hub NIC IP forwarding on. VMs deallocated to save cost.</td></tr>
 <tr><td>Hub VM guest OS</td><td><code>ip_forward = 1</code> persisted</td><td>iptables allow rules are lost on restart. Rerun <code>Enable-GuestForwarding.ps1</code> if pings fail. Configured is not the same as reproducibly configured: in production this belongs in cloud-init or config management.</td></tr>
-<tr><td><code>envs/policy-lab</code></td><td>not yet</td><td>Phase 2.1 is next</td></tr>
-<tr><td><code>envs/governance</code></td><td>not yet</td><td>Phase 2.2, script <code>add-phase2-1-2026-11-03.ps1</code> ready (to be renamed)</td></tr>
+<tr><td><code>envs/policy-lab/governance</code></td><td>1 RG, 1 custom definition, 1 assignment</td><td>Phase 2.1 done. Costs nothing. Destroy any time.</td></tr>
+<tr><td><code>envs/policy-lab/workload</code></td><td>nothing (create was denied)</td><td>State holds only the data source.</td></tr>
+<tr><td><code>envs/governance</code></td><td>8 policy assignments</td><td>Phase 2.2 done, 5/5 tests pass. Every future create or update in the hub-spoke RGs is now checked. Existing probes resources all comply.</td></tr>
 </table></div>
 
 <p><strong>To resume spoke-to-spoke testing:</strong> start the three VMs, rerun <code>Enable-GuestForwarding.ps1</code>, then <code>Test-Phase3Packets.ps1</code>.</p>
 <p><strong>To undo Phase 1.3:</strong> <code>Set-Phase3Stage.ps1 -Stage 0</code>, apply <code>probes</code> first, then <code>lab</code>.</p>
+<p><strong>To remove the guardrails:</strong> <code>terraform destroy</code> in <code>envs/governance</code>. It removes the 8 assignments only.</p>
 <p><strong>Destroy order for the whole lab:</strong> policy-lab workload, policy-lab governance, governance, then probes, then lab. Never destroy <code>lab</code> while <code>probes</code> still has subnets in its VNets.</p>
 
 <footer>Azure Landing Zone Lab journal. Built with ChatGPT and Claude, verified in a Visual Studio MSDN subscription, Canada Central.</footer>
