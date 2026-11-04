@@ -11,6 +11,7 @@ terraform {
 
 # Uses your Azure CLI login. Set ARM_SUBSCRIPTION_ID in your shell first.
 provider "azurerm" {
+  resource_provider_registrations = "none"
   features {}
 }
 
