@@ -1,18 +1,15 @@
 output "network_address_spaces" {
-  description = "The three independently allocated VNet address spaces."
-  value = {
-    hub    = azurerm_virtual_network.hub.address_space
-    spoke1 = azurerm_virtual_network.spoke1.address_space
-    spoke2 = azurerm_virtual_network.spoke2.address_space
-  }
+  description = "Hub and spoke VNet address spaces."
+  value = merge(
+    { hub = azurerm_virtual_network.hub.address_space },
+    { for k, m in module.spoke : k => m.address_space }
+  )
 }
 
 output "peering_names" {
-  description = "Four directional peerings; each hub/spoke pair needs two."
-  value = {
-    hub_to_spoke1 = azurerm_virtual_network_peering.hub_to_spoke1.name
-    spoke1_to_hub = azurerm_virtual_network_peering.spoke1_to_hub.name
-    hub_to_spoke2 = azurerm_virtual_network_peering.hub_to_spoke2.name
-    spoke2_to_hub = azurerm_virtual_network_peering.spoke2_to_hub.name
-  }
+  description = "Directional peerings; each hub/spoke pair needs two."
+  value = merge(
+    { for k, m in module.spoke : "hub_to_${k}" => m.peering_names.hub_to_spoke },
+    { for k, m in module.spoke : "${k}_to_hub" => m.peering_names.spoke_to_hub }
+  )
 }
