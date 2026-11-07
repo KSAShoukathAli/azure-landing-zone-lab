@@ -40,6 +40,8 @@ locals {
   spokes = {
     spoke1 = { address_space = ["10.61.0.0/16"] }
     spoke2 = { address_space = ["10.62.0.0/16"] }
+    # Phase 7. Optional per-spoke tags are merged over common_tags.
+    "integration-dev" = { address_space = ["10.63.0.0/22"], tags = { phase = "07" } }
   }
 }
 
@@ -66,6 +68,6 @@ module "spoke" {
   name          = each.key
   address_space = each.value.address_space
   location      = var.location
-  tags          = local.common_tags
+  tags          = merge(local.common_tags, try(each.value.tags, {}))
   hub           = local.hub
 }
