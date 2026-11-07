@@ -152,7 +152,7 @@ footer { margin-top: 60px; padding-top: 16px; border-top: 1px solid var(--line);
 <header class="top">
   <div class="kicker">Azure Landing Zone Lab - hands-on journal</div>
   <h1>Why the packet went where it went</h1>
-  <p class="lede">A chapter per lab session. What you built, what broke, and what Azure was actually doing underneath. Repo: <code>azure-landing-zone-lab</code>. Last updated 2026-11-04.</p>
+  <p class="lede">A chapter per lab session. What you built, what broke, and what Azure was actually doing underneath. Repo: <code>azure-landing-zone-lab</code>. Last updated 2026-11-06.</p>
 </header>
 
 <nav class="toc">
@@ -167,6 +167,7 @@ footer { margin-top: 60px; padding-top: 16px; border-top: 1px solid var(--line);
     <li><a href="#ch22">2.2 - Guardrails on the landing zone</a> <span class="status done">done</span></li>
     <li><a href="#ch40">4.0 - Remote state and plan on PR</a> <span class="status done">done</span></li>
     <li><a href="#ch3a">3A - One module, many spokes</a> <span class="status done">done</span></li>
+    <li><a href="#ch70">7.0 - A photo before the surgery</a> <span class="status done">done</span></li>
     <li><a href="#gotchas">Things that tripped me up</a></li>
     <li><a href="#state">Where the lab stands right now</a></li>
   </ol>
@@ -763,6 +764,120 @@ terraform plan         No changes.</code></pre>
 <p>"The spoke module is called with for_each over a map, so a new landing zone is one map entry in one PR. Every spoke adds a peering on the hub VNet, and Azure rejects overlapping peering changes, so the rule is one new spoke per PR, and a full rebuild runs with parallelism 1. I moved the existing spokes in with moved blocks. The plan showed eight moves and 0 to add, change or destroy, and after apply the plan was clean again."</p>
 </div>
 
+<!-- ============================================================ CH 7.0 -->
+<div class="chapno" id="ch70">CHAPTER 7.0</div>
+<h2>A photo before the surgery <span class="status done">done</span></h2>
+
+<div class="story">
+<p>Phase 7 starts with a new spoke. You add one map entry and run plan. It says 4 to add, and 1 to change on spoke 1. Did your change do that? Or did someone click something in the portal last week?</p>
+<p>Without a record of how things looked before you started, you can't tell. So before building anything, you take the photo.</p>
+</div>
+
+<p>Step 7.0 builds nothing. Each check answers one question, and each answer is written down so every later step has something to compare against. Two read-only scripts did the work: <code>Phase7-0-Baseline-2026-11-06.ps1</code> and <code>Phase7-0b-Gaps-2026-11-06.ps1</code>. One GitHub setting was changed at the end, with your approval.</p>
+
+<h3>Am I pointed at the right place?</h3>
+<div class="table-wrap"><table>
+<tr><th>Check</th><th>Why</th><th>Result</th></tr>
+<tr><td>Subscription and tenant</td><td>The MSDN subscription is shared with other labs. A wrong default subscription is the cheapest mistake to make and the most expensive to undo. The script stops if the ID doesn't match.</td><td class="pass">ce88c049..., correct</td></tr>
+<tr><td>Branch, last commit, uncommitted changes</td><td>Plan reads the files on disk, not what's in git. One stray edit and every plan below means something else.</td><td class="pass"><code>main</code>, <code>4937d0b</code>, nothing uncommitted</td></tr>
+<tr><td>Repo visibility</td><td>Public changes what counts as a leak. Anything ever committed is readable by anyone.</td><td>PUBLIC</td></tr>
+</table></div>
+
+<h3>Does Terraform's memory match Azure?</h3>
+<p>Every root got three commands. <code>init</code> connects to its backend. <code>state list</code> counts what Terraform believes it owns. <code>plan -detailed-exitcode</code> compares that belief with what Azure actually has.</p>
+<div class="callout key"><span class="label">Exit codes, not text</span>
+<code>-detailed-exitcode</code> returns 0 for no changes, 2 for changes, 1 for an error. A script can tell drift from a broken plan without parsing output. The nightly drift check in 7.5B is built on the same three numbers.
+</div>
+<div class="table-wrap"><table>
+<tr><th>Root</th><th>State</th><th>Items</th><th>Plan</th></tr>
+<tr><td><code>bootstrap</code></td><td>local</td><td>5</td><td class="pass">No changes</td></tr>
+<tr><td><code>envs/lab</code></td><td>remote</td><td>10</td><td class="pass">No changes</td></tr>
+<tr><td><code>envs/governance</code></td><td>remote</td><td>14</td><td class="pass">No changes</td></tr>
+<tr><td><code>envs/probes</code></td><td>local</td><td>21</td><td class="pass">No changes</td></tr>
+<tr><td><code>envs/policy-lab/governance</code></td><td>local</td><td>3</td><td class="pass">No changes</td></tr>
+<tr><td><code>envs/policy-lab/workload</code></td><td>local</td><td>1</td><td>1 to add (expected)</td></tr>
+</table></div>
+<p>Two things came for free. Every plan takes the state lock, and none had to wait, so no stale lock was left behind from earlier sessions. And the policy-lab "1 to add" is the public IP that chapter 2.1 proved gets denied. Expected, and never to be applied.</p>
+
+<h3>What exactly does Terraform own?</h3>
+<p>14 items for 8 policy assignments looks wrong until you read the addresses. <code>state list</code> prints names only, never values, so it's safe to share.</p>
+<div class="table-wrap"><table>
+<tr><th>Root</th><th>Managed</th><th>Data</th><th>What they are</th></tr>
+<tr><td><code>lab</code></td><td>10</td><td>0</td><td>Hub RG and VNet, plus RG, VNet and 2 peerings for each of <code>module.spoke["spoke1"]</code> and <code>["spoke2"]</code>. No subnets.</td></tr>
+<tr><td><code>governance</code></td><td>8</td><td>6</td><td>3 allowed_locations, 3 require_tag, 2 deny_public_ip (spokes only). Data: 3 built-in definitions, 3 RG lookups.</td></tr>
+<tr><td><code>bootstrap</code></td><td>4</td><td>1</td><td>RG, storage account, container, your blob data role. Data: <code>azurerm_client_config</code>.</td></tr>
+</table></div>
+<p>A data source is a lookup. It sits in state, but plan never creates or destroys it.</p>
+<p>This also sets the prediction for 7.1A. <code>lab</code> should go from 10 to 14: <code>module.spoke["integration-dev"]</code> adds an RG, a VNet and two peerings. Anything else in that plan is a surprise, and you stop on it.</p>
+
+<h3>Can I undo?</h3>
+<p>Before the first change, every state file was copied to a folder outside the repo. Remote roots used <code>terraform state pull</code>. Local roots got a plain file copy.</p>
+<p>Bootstrap is the one that matters. Its state is local by design (chapter 4.0), so that file and the backup are the only two copies. And 7.1C is about to add identities and role assignments to it. State holds resource attributes in plain text, so the backup stays off unencrypted cloud sync and never gets pasted anywhere.</p>
+
+<h3>Could the repo leak anything?</h3>
+<div class="table-wrap"><table>
+<tr><th>Check</th><th>Why</th><th>Result</th></tr>
+<tr><td><code>.gitignore</code> covers <code>*.tfstate</code>, <code>*.tfstate.*</code>, <code>*.tfplan</code>, <code>.terraform/</code>, <code>.tfvars</code></td><td>Stops the next mistake</td><td class="pass">all covered</td></tr>
+<tr><td>Risky files tracked now</td><td>Ignore rules don't remove a file that's already committed</td><td class="pass">none</td></tr>
+<tr><td>Risky file names in any commit, ever</td><td>A file deleted later is still in history. On a public repo, anyone can check out that commit.</td><td class="pass">none</td></tr>
+<tr><td>Secret scanning, full history</td><td>File names don't catch a key pasted into a <code>.tf</code> file or a README. Content does.</td><td class="pass">was off, now on, 0 open alerts</td></tr>
+<tr><td>Push protection</td><td>Blocks the next push containing a known secret format, before it lands</td><td class="pass">now on</td></tr>
+</table></div>
+<p>GitHub's scanner knows provider formats: Azure keys, GitHub tokens and the like. It won't catch a generic password in a comment. gitleaks covers that, and stays optional for this repo.</p>
+<div class="callout warn"><span class="label">Trust the read-back, not the command</span>
+The first attempt piped JSON into <code>gh api -X PATCH</code>. No error. Nothing changed: the alerts endpoint still said scanning was disabled. The second attempt passed the same settings as <code>-f</code> fields, then read the setting back: <code>enabled</code>. Network Watcher in 1.3, the green CI check in 4.0, and now this. A command that doesn't fail hasn't proved anything yet.
+</div>
+
+<h3>Who can run code against my Azure?</h3>
+<p>Public means anyone can fork the repo and open a pull request. That PR's workflow runs code a stranger wrote. These settings decide what that code gets.</p>
+<div class="table-wrap"><table>
+<tr><th>Setting</th><th>Result</th><th>Why it matters</th></tr>
+<tr><td>Fork PR approval</td><td class="pass"><code>all_external_contributors</code></td><td>Every outside contributor's workflow waits for you to approve it</td></tr>
+<tr><td>Default <code>GITHUB_TOKEN</code></td><td class="pass">read</td><td>A workflow that forgets to set permissions can't write to the repo</td></tr>
+<tr><td>Actions can approve PRs</td><td class="pass">false</td><td>A workflow can't approve its own change</td></tr>
+<tr><td>Branch protection and rulesets on <code>main</code></td><td>none</td><td>Not needed for 7.1A. Required before 7.3, when a merge to main triggers an apply.</td></tr>
+<tr><td>Environments</td><td>none</td><td>Expected. <code>integration-dev</code> arrives with the apply identity.</td></tr>
+</table></div>
+<p>Zero rulesets also explains something else. The <code>commit_refs_rules</code> push error from the notes repo didn't come from a ruleset here.</p>
+
+<h3>Will Azure let me build what's planned?</h3>
+<p>The provider list in the baseline raised a fair question. Only <code>azurerm</code> is configured, so what are all these?</p>
+<div class="callout key"><span class="label">Two kinds of provider</span>
+The <strong>Terraform provider</strong> is the <code>azurerm</code> plugin. It turns your <code>.tf</code> files into Azure API calls. An <strong>Azure resource provider</strong> is a switch on the subscription, one per service namespace. A subscription can't create a resource type until its namespace is registered. Free, but off until someone turns it on. <code>resource_provider_registrations = "none"</code> (chapter 4.0) means Terraform never touches these switches. The platform owner does, once, on purpose.
+</div>
+<div class="table-wrap"><table>
+<tr><th>Namespace</th><th>State</th><th>Needed for</th></tr>
+<tr><td>Network, Storage, KeyVault, Web, ApiManagement, ServiceBus, ManagedIdentity, Insights, OperationalInsights</td><td class="pass">Registered</td><td>Switched on by earlier labs in this subscription, on first use</td></tr>
+<tr><td><code>Microsoft.App</code></td><td class="fail">NotRegistered</td><td>Flex Consumption in 7.4C would fail with <code>MissingSubscriptionRegistration</code>. The <code>Microsoft.App/environments</code> delegation for <code>snet-func</code> is offered anyway, so 7.1B will likely work.</td></tr>
+</table></div>
+<p>Region checks: Flex Consumption and APIM Standard v2 are both available in Canada Central. You check this now because a tier missing from a region changes the design, not just the code.</p>
+
+<h3>What is costing money?</h3>
+<p>All four VMs are deallocated: three probes, plus MyLinux outside the lab. Deallocated stops the compute bill. The disks keep billing. The only public IP is <code>MyLinux-ip</code>, outside the lab.</p>
+<p>Two budgets exist, both from old labs. Nothing covers this landing zone yet. A budget is an alert that lags hours behind spend, not a brake. Before APIM Standard v2 goes up, it needs one, plus a daily cap you set. The disk list hit an az.cmd quoting bug (field notes) and still needs a rerun.</p>
+
+<h3>Is policy-lab still needed?</h3>
+<p>It isn't in the reviewed plan's baseline, so the question came up. <code>git grep</code> for its RG, definition and assignment names outside <code>policy-lab</code> found nothing. Chapter 2.2 uses built-in definitions, not the custom one. It's free, but a custom definition at subscription scope is a leftover the next reader has to explain. Destroying it is proposed as its own small step.</p>
+
+<h3>What 7.0 found</h3>
+<div class="table-wrap"><table>
+<tr><th>Finding</th><th>Proposed decision</th></tr>
+<tr><td><code>Microsoft.App</code> not registered</td><td>One-time <code>az provider register</code> by the platform owner, journaled, before 7.1B. Not a Terraform resource: destroying it would unregister the provider for the whole subscription.</td></tr>
+<tr><td>Phase 7 plan and design not in the lab repo</td><td>Docs-only PR before 7.1A</td></tr>
+<tr><td>New network RG has no guardrails between 7.1A and 7.1C</td><td>Add it to <code>envs/governance</code> right after 7.1A, or together with the workload RG</td></tr>
+<tr><td>No branch ruleset on <code>main</code></td><td>7.3 prerequisite</td></tr>
+<tr><td>No landing zone budget, no daily cap</td><td>You set the number before anything billable</td></tr>
+<tr><td><code>policy-lab</code> unused</td><td>Destroy as its own step, or leave it</td></tr>
+</table></div>
+
+<div class="callout ok"><span class="label">Gate result</span>
+PASS, 2026-11-06. No unplanned destroy, no drift, no missing state, no stale lock, no secret in history. Evidence: <code>claude/phase-7-0-evidence.md</code>.
+</div>
+
+<div class="interview"><span class="label">Interview line</span>
+<p>"Before building a new landing zone I ran a read-only baseline: right subscription, clean tree, every Terraform root planned with detailed exit codes, state backed up outside the repo, guardrails checked from Azure's side rather than Terraform's, provider registrations and regional SKUs confirmed. The repo is public, so I also checked history, turned on secret scanning, which scanned the full history with zero alerts, and confirmed fork PRs need approval. It found one blocker for later, Microsoft.App unregistered. Terraform deliberately doesn't fix that, because subscription-wide switches belong to the platform owner."</p>
+</div>
+
 <!-- ============================================================ GOTCHAS -->
 <div class="chapno" id="gotchas">FIELD NOTES</div>
 <h2>Things that tripped me up</h2>
@@ -792,6 +907,9 @@ terraform plan         No changes.</code></pre>
 <tr><td><code>terraform fmt -recursive ..\..</code> reformatted another root's tfvars</td><td>Recursive fmt walks every root in the repo</td><td>Only fmt the folders you're changing</td></tr>
 <tr><td>Module call: "An argument named name is not expected here"</td><td>The module had no <code>variables.tf</code>. Its files were never written</td><td>Check the module folder before <code>init</code></td></tr>
 <tr><td>Log search matched timestamps and Node warnings</td><td><code>Select-String</code> is case-insensitive, and "403" hides inside timestamps</td><td><code>-CaseSensitive</code> and specific patterns like <code>Plan: </code></td></tr>
+<tr><td><code>gh api -X PATCH</code> with JSON piped in: no error, nothing changed</td><td>Windows PowerShell 5.1 piping a string into a native command</td><td>Pass fields with <code>-f "a[b][c]=value"</code>, then read the setting back</td></tr>
+<tr><td><code>az disk list</code>: "--resource-group is required"</td><td>A JMESPath <code>join(' | ', ...)</code> query mangled by az.cmd</td><td>Use a simple <code>{Name:name, ...}</code> projection with <code>-o table</code></td></tr>
+<tr><td>"Only azurerm is configured, so what are these providers?"</td><td>Terraform providers and Azure resource providers are different things</td><td><code>az provider show --namespace &lt;name&gt;</code> reads the subscription switch. See 7.0.</td></tr>
 </table></div>
 
 <!-- ============================================================ STATE -->
@@ -808,9 +926,11 @@ terraform plan         No changes.</code></pre>
 <tr><td><code>envs/governance</code></td><td>8 policy assignments</td><td>Remote state (<code>governance.tfstate</code>). Phase 2.2 done, 5/5 tests pass. Every future create or update in the hub-spoke RGs is now checked. Existing probes resources all comply.</td></tr>
 <tr><td>CI plan identity</td><td>App registration <code>gh-azure-landing-zone-lab-plan</code>, 1 federated credential, 4 roles</td><td><code>pull_request</code> subject only. No apply identity yet.</td></tr>
 <tr><td><code>.github/workflows/terraform-plan.yml</code></td><td>Plan on PR for lab and governance</td><td>No apply in CI. Apply is still local.</td></tr>
+<tr><td>Repo settings</td><td>Public. Secret scanning and push protection on (2026-11-06). Fork PRs need approval for all external contributors.</td><td>No branch ruleset yet; needed before 7.3.</td></tr>
+<tr><td>Subscription</td><td><code>Microsoft.App</code> NotRegistered</td><td>Register before 7.1B.</td></tr>
 </table></div>
 
-<p><strong>Next:</strong> 3B (split <code>lab</code> into connectivity and per-landing-zone roots with <code>removed</code> and <code>import</code>), an apply identity on main, and the swap to a user-assigned managed identity.</p>
+<p><strong>Next:</strong> Phase 7.1A, the <code>integration-dev</code> spoke (<code>10.63.0.0/22</code>), <code>envs/lab</code> only. Predicted plan: 4 to add, 0 to change, 0 to destroy. 3B is deferred past Phase 7.</p>
 <p><strong>To resume spoke-to-spoke testing:</strong> start the three VMs, rerun <code>Enable-GuestForwarding.ps1</code>, then <code>Test-Phase3Packets.ps1</code>.</p>
 <p><strong>To undo Phase 1.3:</strong> <code>Set-Phase3Stage.ps1 -Stage 0</code>, apply <code>probes</code> first, then <code>lab</code>.</p>
 <p><strong>To remove the guardrails:</strong> <code>terraform destroy</code> in <code>envs/governance</code>. It removes the 8 assignments only.</p>
