@@ -41,7 +41,17 @@ locals {
     spoke1 = { address_space = ["10.61.0.0/16"] }
     spoke2 = { address_space = ["10.62.0.0/16"] }
     # Phase 7. Optional per-spoke tags are merged over common_tags.
-    "integration-dev" = { address_space = ["10.63.0.0/22"], tags = { phase = "07" } }
+    "integration-dev" = {
+      address_space = ["10.63.0.0/22"]
+      tags          = { phase = "07" }
+      # Phase 7.1B. Platform-built subnets, sized and delegated to the integration team's request.
+      subnets = {
+        apim  = { address_prefix = "10.63.0.0/27", delegation = "Microsoft.Web/serverFarms" }
+        logic = { address_prefix = "10.63.0.64/26", delegation = "Microsoft.Web/serverFarms" }
+        func  = { address_prefix = "10.63.0.128/26", delegation = "Microsoft.App/environments" }
+        pe    = { address_prefix = "10.63.1.0/25", private_endpoint_network_policies = "Enabled" }
+      }
+    }
   }
 }
 
@@ -69,5 +79,6 @@ module "spoke" {
   address_space = each.value.address_space
   location      = var.location
   tags          = merge(local.common_tags, try(each.value.tags, {}))
+  subnets       = try(each.value.subnets, {})
   hub           = local.hub
 }
