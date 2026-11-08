@@ -52,7 +52,7 @@ footer { margin-top:50px; padding-top:14px; border-top:1px solid var(--line); co
 <header>
   <div class="kicker">Azure Landing Zone Lab - reference</div>
   <h1>A real landing zone, and how this lab stands in for it</h1>
-  <p class="lede">The CAF hierarchy from the tenant down, what each level is for, what the lab uses instead, and why. Written 2026-11-07, after 7.1A.</p>
+  <p class="lede">The CAF hierarchy from the tenant down, what each level is for, what the lab uses instead, and why. Updated 2026-11-08, after 7.1A.</p>
 </header>
 
 <div class="story">
@@ -64,7 +64,7 @@ footer { margin-top:50px; padding-top:14px; border-top:1px solid var(--line); co
 <p>One hierarchy, from the tenant down. Anything assigned at a level, Azure Policy or Azure RBAC, flows down to everything below it, and a child can't remove what a parent assigned.</p>
 
 <figure>
-<svg viewBox="0 0 880 520" role="img" aria-label="CAF management group hierarchy from tenant root down to subscriptions and resource groups">
+<svg viewBox="0 0 880 420" role="img" aria-label="CAF management group hierarchy from tenant root down to subscriptions and resource groups">
   <rect class="b top" x="320" y="10" width="240" height="46" rx="6"/>
   <text class="t" x="440" y="31" text-anchor="middle">Tenant Root Group</text>
   <text class="s" x="440" y="48" text-anchor="middle">Entra tenant, always there</text>
@@ -98,34 +98,30 @@ footer { margin-top:50px; padding-top:14px; border-top:1px solid var(--line); co
   <rect class="b plat" x="174" y="252" width="86" height="40" rx="6"/>
   <text class="t" x="217" y="277" text-anchor="middle">Mgmt</text>
   <line class="ln" x1="440" y1="212" x2="440" y2="232"/>
-  <line class="ln" x1="385" y1="232" x2="495" y2="232"/>
+  <line class="ln" x1="385" y1="232" x2="650" y2="232"/>
   <line class="ln" x1="385" y1="232" x2="385" y2="252"/>
-  <line class="ln" x1="495" y1="232" x2="495" y2="252"/>
+  <line class="ln" x1="650" y1="232" x2="650" y2="252"/>
   <rect class="b lz" x="335" y="252" width="100" height="40" rx="6"/>
   <text class="t" x="385" y="277" text-anchor="middle">Corp</text>
-  <rect class="b lz" x="445" y="252" width="100" height="40" rx="6"/>
-  <text class="t" x="495" y="277" text-anchor="middle">Online</text>
+  <rect class="b lz" x="600" y="252" width="100" height="40" rx="6"/>
+  <text class="t" x="650" y="277" text-anchor="middle">Online</text>
   <line class="ln" x1="60" y1="292" x2="60" y2="322"/>
-  <rect class="b top" x="5" y="322" width="250" height="52" rx="6"/>
-  <text class="t" x="130" y="344" text-anchor="middle">hub subscription</text>
-  <text class="s" x="130" y="362" text-anchor="middle">hub VNet, firewall, DNS zones</text>
-  <line class="ln" x1="385" y1="292" x2="385" y2="322"/>
-  <rect class="b top" x="290" y="322" width="290" height="52" rx="6"/>
-  <text class="t" x="435" y="344" text-anchor="middle">integration-dev subscription</text>
-  <text class="s" x="435" y="362" text-anchor="middle">one per landing zone</text>
-  <line class="ln" x1="435" y1="374" x2="435" y2="396"/>
-  <line class="ln" x1="340" y1="396" x2="530" y2="396"/>
-  <line class="ln" x1="340" y1="396" x2="340" y2="414"/>
-  <line class="ln" x1="530" y1="396" x2="530" y2="414"/>
-  <rect class="b top" x="250" y="414" width="180" height="52" rx="6"/>
-  <text class="t" x="340" y="436" text-anchor="middle">network RG</text>
-  <text class="s" x="340" y="454" text-anchor="middle">VNet, subnets, NSGs</text>
-  <rect class="b top" x="440" y="414" width="180" height="52" rx="6"/>
-  <text class="t" x="530" y="436" text-anchor="middle">workload RG</text>
-  <text class="s" x="530" y="454" text-anchor="middle">APIM, Logic App, PEs</text>
-  <text class="s" x="10" y="505">Green: Platform branch. Blue: Landing Zones branch. Rules flow down each branch only.</text>
+  <rect class="b top" x="5" y="322" width="225" height="52" rx="6"/>
+  <text class="t" x="117" y="344" text-anchor="middle">hub subscription</text>
+  <text class="s" x="117" y="362" text-anchor="middle">hub VNet, firewall, DNS zones</text>
+  <line class="ln" x1="385" y1="292" x2="385" y2="306"/>
+  <line class="ln" x1="345" y1="306" x2="565" y2="306"/>
+  <line class="ln" x1="345" y1="306" x2="345" y2="322"/>
+  <line class="ln" x1="565" y1="306" x2="565" y2="322"/>
+  <rect class="b top" x="240" y="322" width="210" height="52" rx="6"/>
+  <text class="t" x="345" y="344" text-anchor="middle">integration-dev sub</text>
+  <text class="s" x="345" y="362" text-anchor="middle">network RG + workload RG</text>
+  <rect class="b top" x="460" y="322" width="210" height="52" rx="6"/>
+  <text class="t" x="565" y="344" text-anchor="middle">integration-prod sub</text>
+  <text class="s" x="565" y="362" text-anchor="middle">same shape, own range</text>
+  <text class="s" x="10" y="408">Green: Platform branch. Blue: Landing Zones branch. Rules flow down each branch only.</text>
 </svg>
-<figcaption>The hub and the app landing zones sit in different branches. That's how Corp's "no public IPs" rule never reaches the hub.</figcaption>
+<figcaption>The hub and the app landing zones sit in different branches. That's how Corp's "no public IPs" rule never reaches the hub. Dev and prod are separate subscriptions under the same Corp rules.</figcaption>
 </figure>
 
 <div class="table-wrap"><table>
@@ -142,9 +138,167 @@ footer { margin-top:50px; padding-top:14px; border-top:1px solid var(--line); co
 The resource hierarchy above decides <strong>governance</strong>. Billing is a separate tree (billing account, billing profile, invoice section, subscription) that decides <strong>who pays</strong>. A subscription sits in both. Management groups aren't only for policy: RBAC and cost views flow down them too.
 </div>
 
+<h3>The Platform branch, in detail</h3>
+<p>Three management groups, each with its own subscription. Platform runs all of it; app teams use it but never change it.</p>
+<figure>
+<svg viewBox="0 0 880 714" role="img" aria-label="Platform branch: Connectivity, Identity and Management, down to resource groups">
+  <path class="ln" d="M26 56 L26 88 L44 88"/>
+  <path class="ln" d="M60 110 L60 142 L78 142"/>
+  <path class="ln" d="M94 164 L94 196 L112 196"/>
+  <path class="ln" d="M94 164 L94 250 L112 250"/>
+  <path class="ln" d="M26 56 L26 304 L44 304"/>
+  <path class="ln" d="M60 326 L60 358 L78 358"/>
+  <path class="ln" d="M94 380 L94 412 L112 412"/>
+  <path class="ln" d="M26 56 L26 466 L44 466"/>
+  <path class="ln" d="M60 488 L60 520 L78 520"/>
+  <path class="ln" d="M94 542 L94 574 L112 574"/>
+  <path class="ln" d="M94 542 L94 628 L112 628"/>
+  <path class="ln" d="M94 542 L94 682 L112 682"/>
+  <rect class="b plat" x="10" y="12" width="198" height="44" rx="6"/>
+  <text class="t" x="22" y="31">Platform MG</text>
+  <text class="s" x="22" y="48">run by the platform team</text>
+  <rect class="b plat" x="44" y="66" width="372" height="44" rx="6"/>
+  <text class="t" x="56" y="85">Connectivity MG</text>
+  <text class="s" x="56" y="102">public IPs allowed here: it is the internet edge</text>
+  <rect class="b top" x="78" y="120" width="256" height="44" rx="6"/>
+  <text class="t" x="90" y="139">hub subscription</text>
+  <text class="s" x="90" y="156">one per region in larger estates</text>
+  <rect class="b top" x="112" y="174" width="466" height="44" rx="6"/>
+  <text class="t" x="124" y="193">rg-hub-network</text>
+  <text class="s" x="124" y="210">hub VNet, Azure Firewall, VPN / ExpressRoute gateway, Bastion</text>
+  <rect class="b top" x="112" y="228" width="408" height="44" rx="6"/>
+  <text class="t" x="124" y="247">rg-hub-dns</text>
+  <text class="s" x="124" y="264">privatelink.* zones, DNS Private Resolver for on-prem</text>
+  <rect class="b plat" x="44" y="282" width="285" height="44" rx="6"/>
+  <text class="t" x="56" y="301">Identity MG</text>
+  <text class="s" x="56" y="318">tightly locked: only identity admins</text>
+  <rect class="b top" x="78" y="336" width="248" height="44" rx="6"/>
+  <text class="t" x="90" y="355">identity subscription</text>
+  <text class="s" x="90" y="372">only if you run hybrid identity</text>
+  <rect class="b top" x="112" y="390" width="335" height="44" rx="6"/>
+  <text class="t" x="124" y="409">rg-identity</text>
+  <text class="s" x="124" y="426">AD DS domain controllers, peered to the hub</text>
+  <rect class="b plat" x="44" y="444" width="241" height="44" rx="6"/>
+  <text class="t" x="56" y="463">Management MG</text>
+  <text class="s" x="56" y="480">logs and security for everyone</text>
+  <rect class="b top" x="78" y="498" width="299" height="44" rx="6"/>
+  <text class="t" x="90" y="517">management subscription</text>
+  <text class="s" x="90" y="534">every landing zone sends its logs here</text>
+  <rect class="b top" x="112" y="552" width="459" height="44" rx="6"/>
+  <text class="t" x="124" y="571">rg-monitoring</text>
+  <text class="s" x="124" y="588">Log Analytics workspace, Azure Monitor alerts, action groups</text>
+  <rect class="b top" x="112" y="606" width="357" height="44" rx="6"/>
+  <text class="t" x="124" y="625">rg-security</text>
+  <text class="s" x="124" y="642">Microsoft Sentinel, Defender for Cloud exports</text>
+  <rect class="b top" x="112" y="660" width="314" height="44" rx="6"/>
+  <text class="t" x="124" y="679">rg-automation</text>
+  <text class="s" x="124" y="696">Automation account, Azure Update Manager</text>
+</svg>
+<figcaption>Connectivity is the network and DNS hub. Identity only exists if you run domain controllers. Management collects logs and security signals from every landing zone.</figcaption>
+</figure>
+
+<h3>The Landing Zones branch, in detail</h3>
+<p>Corp holds internal apps peered to the hub. Each environment is its own subscription, so dev mistakes can't touch prod, and each gets its own budget and RBAC. Online is for apps that face the internet.</p>
+<figure>
+<svg viewBox="0 0 880 606" role="img" aria-label="Landing Zones branch: Corp with integration dev and prod, and Online">
+  <path class="ln" d="M26 56 L26 88 L44 88"/>
+  <path class="ln" d="M60 110 L60 142 L78 142"/>
+  <path class="ln" d="M94 164 L94 196 L112 196"/>
+  <path class="ln" d="M94 164 L94 250 L112 250"/>
+  <path class="ln" d="M60 110 L60 304 L78 304"/>
+  <path class="ln" d="M94 326 L94 358 L112 358"/>
+  <path class="ln" d="M94 326 L94 412 L112 412"/>
+  <path class="ln" d="M60 110 L60 466 L78 466"/>
+  <path class="ln" d="M26 56 L26 520 L44 520"/>
+  <path class="ln" d="M60 542 L60 574 L78 574"/>
+  <rect class="b lz" x="10" y="12" width="386" height="44" rx="6"/>
+  <text class="t" x="22" y="31">Landing Zones MG</text>
+  <text class="s" x="22" y="48">run by app teams; deploy-diagnostics policies here</text>
+  <rect class="b lz" x="44" y="66" width="386" height="44" rx="6"/>
+  <text class="t" x="56" y="85">Corp MG</text>
+  <text class="s" x="56" y="102">internal, peered to the hub. Policy: no public IPs</text>
+  <rect class="b top" x="78" y="120" width="335" height="44" rx="6"/>
+  <text class="t" x="90" y="139">integration-dev subscription</text>
+  <text class="s" x="90" y="156">dev environment of the integration platform</text>
+  <rect class="b top" x="112" y="174" width="372" height="44" rx="6"/>
+  <text class="t" x="124" y="193">network RG</text>
+  <text class="s" x="124" y="210">VNet 10.63.0.0/22, subnets, NSGs (platform owns)</text>
+  <rect class="b top" x="112" y="228" width="415" height="44" rx="6"/>
+  <text class="t" x="124" y="247">workload RG</text>
+  <text class="s" x="124" y="264">APIM, Logic App, Function, Service Bus, Key Vault, PEs</text>
+  <rect class="b top" x="78" y="282" width="263" height="44" rx="6"/>
+  <text class="t" x="90" y="301">integration-prod subscription</text>
+  <text class="s" x="90" y="318">same shape, its own address range</text>
+  <rect class="b top" x="112" y="336" width="364" height="44" rx="6"/>
+  <text class="t" x="124" y="355">network RG</text>
+  <text class="s" x="124" y="372">own VNet, own range, its own peering to the hub</text>
+  <rect class="b top" x="112" y="390" width="379" height="44" rx="6"/>
+  <text class="t" x="124" y="409">workload RG</text>
+  <text class="s" x="124" y="426">same services, zone-redundant SKUs, stricter RBAC</text>
+  <rect class="b oth" x="78" y="444" width="321" height="44" rx="6"/>
+  <text class="t" x="90" y="463">other app teams</text>
+  <text class="s" x="90" y="480">one subscription per team per environment</text>
+  <rect class="b lz" x="44" y="498" width="444" height="44" rx="6"/>
+  <text class="t" x="56" y="517">Online MG</text>
+  <text class="s" x="56" y="534">internet-facing apps. Public endpoints allowed, behind WAF</text>
+  <rect class="b top" x="78" y="552" width="364" height="44" rx="6"/>
+  <text class="t" x="90" y="571">partner-portal-prod subscription</text>
+  <text class="s" x="90" y="588">App Gateway WAF or Front Door, public front end</text>
+</svg>
+<figcaption>Dev and prod have the same shape: a network RG owned by platform and a workload RG owned by the team. Sandbox and Decommissioned (in the top picture) sit beside Landing Zones, not under it.</figcaption>
+</figure>
+
 <h2>2. The lab, level by level</h2>
 <p>Everything below runs in one MSDN subscription, <code>ce88c049...</code>, in Canada Central. Resource groups and separate Terraform roots play the parts that subscriptions and teams play in a real tenant.</p>
 
+<h3>The lab as the same kind of tree</h3>
+<p>Same format as the trees above. Green boxes stand in for Platform pieces, blue for landing zone pieces. Dashed boxes are planned, not built yet.</p>
+<figure>
+<svg viewBox="0 0 880 552" role="img" aria-label="The lab as a tree: one subscription with resource groups standing in for subscriptions">
+  <path class="ln" d="M26 56 L26 88 L44 88"/>
+  <path class="ln" d="M60 110 L60 142 L78 142"/>
+  <path class="ln" d="M94 164 L94 196 L112 196"/>
+  <path class="ln" d="M60 110 L60 250 L78 250"/>
+  <path class="ln" d="M60 110 L60 304 L78 304"/>
+  <path class="ln" d="M60 110 L60 358 L78 358"/>
+  <path class="ln" d="M60 110 L60 412 L78 412"/>
+  <path class="ln" d="M60 110 L60 466 L78 466"/>
+  <path class="ln" d="M60 110 L60 520 L78 520"/>
+  <rect class="b top" x="10" y="12" width="314" height="44" rx="6"/>
+  <text class="t" x="22" y="31">Tenant Root Group</text>
+  <text class="s" x="22" y="48">no management groups created in this lab</text>
+  <rect class="b top" x="44" y="66" width="437" height="44" rx="6"/>
+  <text class="t" x="56" y="85">MSDN subscription ce88c049...</text>
+  <text class="s" x="56" y="102">shared with other labs: one subscription plays every part</text>
+  <rect class="b plat" x="78" y="120" width="517" height="44" rx="6"/>
+  <text class="t" x="90" y="139">rg-hubspoke-hub-cac</text>
+  <text class="s" x="90" y="156">stands in for the hub subscription: hub VNet 10.60.0.0/16, router VM</text>
+  <rect class="b plat" x="112" y="174" width="343" height="44" rx="6" stroke-dasharray="5 4"/>
+  <text class="t" x="124" y="193">private DNS zones (7.1B)</text>
+  <text class="s" x="124" y="210">seven privatelink.* zones, inside the hub RG</text>
+  <rect class="b lz" x="78" y="228" width="480" height="44" rx="6"/>
+  <text class="t" x="90" y="247">rg-hubspoke-spoke1-cac, -spoke2-</text>
+  <text class="s" x="90" y="264">stand in for Corp landing zones: 10.61 and 10.62 /16, probe VMs</text>
+  <rect class="b lz" x="78" y="282" width="451" height="44" rx="6"/>
+  <text class="t" x="90" y="301">rg-hubspoke-integration-dev-cac</text>
+  <text class="s" x="90" y="318">the network RG: VNet 10.63.0.0/22. Subnets and NSGs in 7.1B</text>
+  <rect class="b lz" x="78" y="336" width="459" height="44" rx="6" stroke-dasharray="5 4"/>
+  <text class="t" x="90" y="355">rg-intdev-workload-cac (7.1C)</text>
+  <text class="s" x="90" y="372">the workload RG: Key Vault, storage, PEs, Logic App, APIM...</text>
+  <rect class="b plat" x="78" y="390" width="321" height="44" rx="6"/>
+  <text class="t" x="90" y="409">rg-tfstate-cac</text>
+  <text class="s" x="90" y="426">platform tooling: Terraform state storage</text>
+  <rect class="b plat" x="78" y="444" width="393" height="44" rx="6" stroke-dasharray="5 4"/>
+  <text class="t" x="90" y="463">rg-cicd-identity-cac (7.1C)</text>
+  <text class="s" x="90" y="480">platform tooling: plan and apply managed identities</text>
+  <rect class="b oth" x="78" y="498" width="258" height="44" rx="6"/>
+  <text class="t" x="90" y="517">other labs (APIM, MyLinux...)</text>
+  <text class="s" x="90" y="534">outside this lab, untouched</text>
+</svg>
+<figcaption>One subscription plays every part, so the levels the real tree has between the tenant and the RGs are missing. Everything a real tenant does with management groups and subscriptions, the lab does with RGs and code.</figcaption>
+</figure>
+
+<h3>Side by side</h3>
 <div class="table-wrap"><table>
 <tr><th>Real organization</th><th>This lab</th><th>Why the lab differs</th></tr>
 <tr><td>Management group tree</td><td>None. Only the Tenant Root Group, with the subscription directly under it</td><td>One subscription, shared with other labs. A management group Deny would hit all of them</td></tr>
@@ -152,6 +306,7 @@ The resource hierarchy above decides <strong>governance</strong>. Billing is a s
 <tr><td>Hub exempt by living in the Connectivity branch</td><td><code>if k != "hub"</code> filter on the public IP rule</td><td>No branches to put it in, so the exemption is in code</td></tr>
 <tr><td>Connectivity subscription</td><td><code>rg-hubspoke-hub-cac</code>, root <code>envs/lab</code></td><td>RG stands in for the subscription</td></tr>
 <tr><td>One subscription per landing zone</td><td>One RG per spoke: <code>rg-hubspoke-spoke1-cac</code>, <code>-spoke2-</code>, <code>-integration-dev-</code></td><td>Same reason</td></tr>
+<tr><td>Separate dev and prod subscriptions per app</td><td>Dev only: <code>integration-dev</code></td><td>Prod would be one more map entry with its own range, for example <code>10.64.0.0/22</code></td></tr>
 <tr><td>Network RG and workload RG inside the landing zone subscription</td><td>Network RG today. Workload RG <code>rg-intdev-workload-cac</code> in 7.1C</td><td>Matches the real pattern</td></tr>
 <tr><td>Subscription vending</td><td>One map entry calling <code>modules/spoke-network</code></td><td>Same idea, a smaller unit</td></tr>
 <tr><td>Hub firewall with UDRs</td><td>A Linux VM router (1.3), deallocated. No firewall</td><td>Cost. Firewall is a later phase</td></tr>
