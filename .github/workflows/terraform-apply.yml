@@ -1,0 +1,135 @@
+name: terraform-apply
+
+# Runs after a PR is merged to main and changes the lab root or the modules.
+# Plan on main (read-only identity) -> wait for approval -> apply that exact saved plan
+# (apply identity, only inside the lab-apply environment) -> re-plan must be clean.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'terraform/envs/lab/**'
+      - 'terraform/modules/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+# One apply at a time. A second merge waits; it is never cancelled half way.
+concurrency:
+  group: terraform-apply-lab
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: plan (lab, main)
+    runs-on: ubuntu-latest
+    outputs:
+      changes: ${{ steps.plan.outputs.changes }}
+    defaults:
+      run:
+        working-directory: terraform/envs/lab
+    env:
+      ARM_USE_OIDC: "true"
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }} # read-only plan identity
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+
+      - name: init
+        run: terraform init -input=false
+
+      - name: plan
+        id: plan
+        run: |
+          set +e
+          terraform plan -input=false -no-color -lock-timeout=120s -detailed-exitcode -out=tfplan > plan-log.txt 2>&1
+          code=$?
+          set -e
+          cat plan-log.txt
+          if [ $code -eq 1 ]; then exit 1; fi
+          terraform show -no-color tfplan > plan.txt
+          if [ $code -eq 2 ]; then
+            echo "changes=true" >> "$GITHUB_OUTPUT"
+            result="Changes - waiting for approval in the apply job"
+          else
+            echo "changes=false" >> "$GITHUB_OUTPUT"
+            result="No changes - apply job skipped"
+          fi
+          {
+            echo "### lab (main): $result"
+            echo '```'
+            grep -E '^(Plan:|No changes|  #)' plan.txt || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # The exact plan you approve. Summary > Artifacts.
+      - name: upload saved plan
+        if: steps.plan.outputs.changes == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-lab-${{ github.run_id }}
+          path: |
+            terraform/envs/lab/tfplan
+            terraform/envs/lab/plan.txt
+          retention-days: 7
+
+  apply:
+    name: apply (lab)
+    needs: plan
+    if: needs.plan.outputs.changes == 'true'
+    runs-on: ubuntu-latest
+    environment: lab-apply # approval gate; only this job can get the apply identity's token
+    defaults:
+      run:
+        working-directory: terraform/envs/lab
+    env:
+      ARM_USE_OIDC: "true"
+      ARM_CLIENT_ID: ${{ vars.AZURE_APPLY_CLIENT_ID }} # environment variable, apply identity
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+
+      - name: init
+        run: terraform init -input=false
+
+      - name: download saved plan
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-lab-${{ github.run_id }}
+          path: terraform/envs/lab
+
+      # Applies the approved file only. If main or state moved since the plan,
+      # Terraform refuses the stale plan and nothing changes.
+      - name: apply
+        run: terraform apply -input=false -no-color -lock-timeout=120s tfplan
+
+      - name: re-plan (must be clean)
+        run: |
+          set +e
+          terraform plan -input=false -no-color -lock-timeout=120s -detailed-exitcode > replan.txt 2>&1
+          code=$?
+          set -e
+          cat replan.txt
+          if [ $code -eq 0 ]; then
+            echo "### lab: applied, re-plan clean" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### lab: re-plan NOT clean (exit $code) - check the log" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
