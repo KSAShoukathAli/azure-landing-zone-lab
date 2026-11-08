@@ -1,13 +1,10 @@
 name: terraform-plan
 
 on:
+  # No paths filter: the branch ruleset requires these checks on every PR,
+  # so they must run on every PR (docs PRs just show No changes).
   pull_request:
     branches: [main]
-    paths:
-      - 'terraform/envs/lab/**'
-      - 'terraform/envs/governance/**'
-      - 'terraform/modules/**'
-      - '.github/workflows/terraform-plan.yml'
 
 permissions:
   contents: read
@@ -52,10 +49,12 @@ jobs:
       - name: plan
         run: |
           set +e
-          terraform plan -input=false -no-color -lock-timeout=120s -detailed-exitcode > plan.txt 2>&1
+          terraform plan -input=false -no-color -lock-timeout=120s -detailed-exitcode -out=tfplan > plan.txt 2>&1
           code=$?
           set -e
           cat plan.txt
+          # Readable copy of the saved plan, uploaded below for review.
+          if [ $code -ne 1 ]; then terraform show -no-color tfplan > plan-readable.txt; fi
           case $code in
             0) result="No changes" ;;
             2) result="Changes detected" ;;
@@ -68,3 +67,16 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           if [ $code -eq 1 ]; then exit 1; fi
+
+      # Stored plan for review: run page > Summary > Artifacts.
+      # Text only. The binary plan is not uploaded from PRs; apply uses a fresh plan on main.
+      - name: upload plan
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: plan-${{ matrix.root }}-pr${{ github.event.pull_request.number }}
+          path: |
+            terraform/envs/${{ matrix.root }}/plan.txt
+            terraform/envs/${{ matrix.root }}/plan-readable.txt
+          retention-days: 7
+          if-no-files-found: warn
