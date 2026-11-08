@@ -152,7 +152,7 @@ footer { margin-top: 60px; padding-top: 16px; border-top: 1px solid var(--line);
 <header class="top">
   <div class="kicker">Azure Landing Zone Lab - hands-on journal</div>
   <h1>Why the packet went where it went</h1>
-  <p class="lede">A chapter per lab session. What you built, what broke, and what Azure was actually doing underneath. Repo: <code>azure-landing-zone-lab</code>. Last updated 2026-11-06.</p>
+  <p class="lede">A chapter per lab session. What you built, what broke, and what Azure was actually doing underneath. Repo: <code>azure-landing-zone-lab</code>. Last updated 2026-11-07.</p>
 </header>
 
 <nav class="toc">
@@ -168,6 +168,7 @@ footer { margin-top: 60px; padding-top: 16px; border-top: 1px solid var(--line);
     <li><a href="#ch40">4.0 - Remote state and plan on PR</a> <span class="status done">done</span></li>
     <li><a href="#ch3a">3A - One module, many spokes</a> <span class="status done">done</span></li>
     <li><a href="#ch70">7.0 - A photo before the surgery</a> <span class="status done">done</span></li>
+    <li><a href="#ch71a">7.1A - One map entry, one landing zone</a> <span class="status done">done</span></li>
     <li><a href="#gotchas">Things that tripped me up</a></li>
     <li><a href="#state">Where the lab stands right now</a></li>
   </ol>
@@ -878,6 +879,123 @@ PASS, 2026-11-06. No unplanned destroy, no drift, no missing state, no stale loc
 <p>"Before building a new landing zone I ran a read-only baseline: right subscription, clean tree, every Terraform root planned with detailed exit codes, state backed up outside the repo, guardrails checked from Azure's side rather than Terraform's, provider registrations and regional SKUs confirmed. The repo is public, so I also checked history, turned on secret scanning, which scanned the full history with zero alerts, and confirmed fork PRs need approval. It found one blocker for later, Microsoft.App unregistered. Terraform deliberately doesn't fix that, because subscription-wide switches belong to the platform owner."</p>
 </div>
 
+<!-- ============================================================ CH 7.1A -->
+<div class="chapno" id="ch71a">CHAPTER 7.1A</div>
+<h2>One map entry, one landing zone <span class="status done">done</span></h2>
+
+<div class="story">
+<p>The integration team wants private endpoints for Key Vault, a Logic App that never touches the internet, APIM behind a private IP. Before any of that, they need somewhere to put it: a network of their own, connected to the hub and to nobody else.</p>
+<p>In chapter 3A, adding a landing zone became one line. Tonight you find out what else that one line drags behind it.</p>
+</div>
+
+<h3>What got built</h3>
+<p>One entry in the <code>spokes</code> map in <code>envs/lab/main.tf</code>. The module from 3A did the rest: four resources, all under <code>module.spoke["integration-dev"]</code>.</p>
+<pre><code>"integration-dev" = { address_space = ["10.63.0.0/22"], tags = { phase = "07" } }</code></pre>
+<div class="table-wrap"><table>
+<tr><th>Resource</th><th>Azure name</th><th>Note</th></tr>
+<tr><td>Resource group</td><td><code>rg-hubspoke-integration-dev-cac</code></td><td>The network RG</td></tr>
+<tr><td>VNet</td><td><code>vnet-integration-dev-cac</code></td><td><code>10.63.0.0/22</code>, no subnets yet</td></tr>
+<tr><td>Peering, hub half</td><td><code>peer-hub-to-integration-dev</code></td><td>Lives on the hub VNet. Forwarded traffic off</td></tr>
+<tr><td>Peering, spoke half</td><td><code>peer-integration-dev-to-hub</code></td><td>Lives on the new VNet. Forwarded traffic on (module default)</td></tr>
+</table></div>
+<p>A /22 is 1,024 addresses. Enough for four subnets with room to spare, without burning a whole /16 the way the older spokes do.</p>
+
+<h3>The tag that would have lied</h3>
+<p>The lab root gives every resource <code>phase = "01"</code>. Left alone, the new spoke would have been tagged Phase 1. Changing <code>common_tags</code> would have changed spoke1 and spoke2 too, so that was out.</p>
+<p>The fix is an optional override per spoke: <code>tags = merge(local.common_tags, try(each.value.tags, {}))</code>. A spoke that passes no tags gets <code>{}</code> from <code>try</code>, so the merge changes nothing and spoke1 and spoke2 plan at No changes. Integration-dev passes <code>phase = "07"</code>, and <code>merge</code> lets the later map win.</p>
+
+<h3>The five questions, short</h3>
+<div class="table-wrap"><table>
+<tr><th>Question</th><th>Answer</th></tr>
+<tr><td>Why does it exist?</td><td>Private endpoints and VNet integration need a VNet of the team's own, connected to the hub's shared services.</td></tr>
+<tr><td>What did we reject?</td><td>Reusing spoke1 (mixes teams), public PaaS only (no private endpoints), a separate subscription (right in an enterprise, but one MSDN subscription here), a /16 (wasteful), peering to other spokes (a mesh that bypasses the hub).</td></tr>
+<tr><td>How does it interact?</td><td>The hub learns <code>10.63.0.0/22</code> over peering. spoke1 and spoke2 don't: peering isn't transitive, so their <code>10.63.x</code> still falls into <code>10/8 None</code>. No DNS, token or data flow yet.</td></tr>
+<tr><td>What happens when it fails?</td><td>A missing half shows <code>Initiated</code>, not <code>Connected</code>. Two peering changes on the hub at once give <code>AnotherOperationInProgress</code>. An overlapping range is refused. To undo: remove the map entry, plan shows 4 to destroy.</td></tr>
+<tr><td>Who owns it?</td><td>Platform network, through <code>envs/lab</code>. The integration team asks for it and can't change it.</td></tr>
+</table></div>
+
+<h3>Predict, then run</h3>
+<p>The prediction was written down before any code: 4 to add, 0 to change, 0 to destroy, every address under <code>module.spoke["integration-dev"]</code>. Anything touching spoke1, spoke2 or the hub VNet itself would be a stop.</p>
+<div class="table-wrap"><table>
+<tr><th>Check</th><th>Result</th></tr>
+<tr><td>Local plan on the branch</td><td class="pass">4 to add, all integration-dev</td></tr>
+<tr><td>CI plan on PR #4</td><td class="pass">lab 4 to add, governance No changes</td></tr>
+<tr><td>Saved plan, re-checked before apply</td><td class="pass">same 4</td></tr>
+<tr><td>Apply</td><td class="pass">4 added</td></tr>
+<tr><td>Plan after apply</td><td class="pass">exit code 0, 14 items in state</td></tr>
+</table></div>
+<p>The apply script refuses to apply unless the saved plan matches, then still waits for you to type <code>yes</code>. Two gates, and a person at the second one.</p>
+
+<h3>The side effect: CI goes blind</h3>
+<p>Nothing in the code was wrong, and the next PR would still have failed. Here's why.</p>
+<p>Plan compares three things: the code (from the checkout), the state (from the blob) and the real resources (from Azure). To read the real resources, CI logs in as the app registration, and that identity had Reader on three RGs. Now state holds three things in a fourth RG it can't see. The next <code>plan (lab)</code> would die with <code>AuthorizationFailed</code>.</p>
+<p>The fix was one <code>az role assignment create</code>: Reader for the CI identity on the new RG. It's recorded as a deviation, because it sits outside Terraform, and it disappears in 7.1C with the app registration.</p>
+
+<div class="callout key"><span class="label">How GitHub proves who it is</span>
+<ol>
+<li>GitHub signs a short-lived token with its own private key. Its <code>sub</code> claim describes the run: <code>repo:KSAShoukathAli@275120224/azure-landing-zone-lab@1443587946:pull_request</code>.</li>
+<li>Terraform sends that token to Entra with <code>client_id</code> (which app to log in as). The tenant ID is in the URL.</li>
+<li>Entra checks GitHub's signature with GitHub's public keys, then compares <code>iss</code>, <code>sub</code> and <code>aud</code> with the app's federated credential. Exact match, or no.</li>
+<li>Entra returns an Azure token for the app's service principal. RBAC then checks that service principal's roles on each resource.</li>
+</ol>
+<code>AZURE_CLIENT_ID</code>, <code>AZURE_TENANT_ID</code> and <code>AZURE_SUBSCRIPTION_ID</code> are GitHub variables, not secrets. They're lookup keys. Without a GitHub-signed token with the right subject, they open nothing.
+</div>
+
+<h3>Why the app registration has to go</h3>
+<p>Anyone who can manage an app registration can add a client secret to it. With that secret, they log in from a laptop as the CI identity, and OIDC is never checked. A user-assigned managed identity can't hold a secret or a certificate at all, so federation is the only door. It also lives in an RG like any other resource, gets cleaned up with it, and can be created with plain <code>azurerm</code>, without tenant-wide Graph permissions.</p>
+<div class="table-wrap"><table>
+<tr><th>Outside app, ways in</th><th>Holds</th><th>When</th></tr>
+<tr><td>Managed identity</td><td>Nothing</td><td>Runs inside Azure</td></tr>
+<tr><td>Workload identity federation</td><td>Nothing. A fresh signed token per run</td><td>The outside platform issues OIDC tokens (GitHub, GitLab, Kubernetes, AWS)</td></tr>
+<tr><td>Certificate</td><td>A private key</td><td>The platform can't do OIDC</td></tr>
+<tr><td>Client secret</td><td>A password</td><td>Last resort, short-lived, in a vault</td></tr>
+</table></div>
+
+<div class="callout key"><span class="label">Two kinds of role</span>
+<strong>App roles</strong> are defined by an API in its own app registration, for example <code>Prescriptions.Read</code>, and checked by that API's code in the token's <code>roles</code> claim. <strong>Azure RBAC</strong> roles (Reader, Storage Blob Data Contributor) are assigned on the resource, in Access control (IAM), and enforced by Resource Manager. The side that owns the thing defines the roles and holds the assignment. That's why the state permission lives on the <code>tfstate</code> container, not in the app registration.
+</div>
+
+<h3>Guardrails, moved earlier</h3>
+<p>The reviewed plan added the new RG to governance in 7.1C. That left a gap: from 7.1A on, anything could land in it, in any region, untagged, with a public IP. And 7.1B is about to create NSGs there. So you moved it forward. One entry in the governance <code>scopes</code> map (PR #5), 3 to add, about 1 minute 40 seconds each while the assignments replicated globally.</p>
+<div class="table-wrap"><table>
+<tr><th>Test</th><th>Attempt</th><th>Result</th></tr>
+<tr><td>A</td><td>Public IP, tagged</td><td class="pass">DENIED</td></tr>
+<tr><td>B</td><td>Route table in eastus, tagged</td><td class="pass">DENIED</td></tr>
+<tr><td>C</td><td>Route table, no tag</td><td class="pass">DENIED</td></tr>
+<tr><td>D</td><td>Route table, right region and tag (control)</td><td class="pass">ALLOWED, then deleted</td></tr>
+</table></div>
+<p>The route tables are throwaway probes: free, instant, taggable, any region. D is the one that matters most. A broken policy that denies everything would pass A, B and C. Only D proves the rules still let normal work through.</p>
+<p>Carry-forward: the NSGs 7.1B creates in this RG must carry <code>managed_by</code>, or test C happens for real.</p>
+
+<h3>What lives where</h3>
+<p>A subnet isn't a resource of its own. It's a child of the VNet, so it always lives in the VNet's RG. Everything else can sit elsewhere: NSGs, private endpoints, the services themselves. They join a subnet across RGs with <code>subnets/join/action</code>, which is the "Subnet Join" role in 7.1C.</p>
+<p>So the design is two RGs per landing zone, split by owner and lifecycle. The network RG holds the VNet, subnets and NSGs (platform). The workload RG holds the services and their private endpoints (integration team). A private endpoint lives and dies with the service it serves, so it goes with the service.</p>
+<p>The private DNS zones go in neither. They go in the hub. One <code>privatelink.vaultcore.azure.net</code> for everybody, because a VNet can link only one zone of a given name. Two copies means each VNet sees half the records.</p>
+
+<h3>Also done</h3>
+<ul>
+<li><code>Microsoft.App</code> registered on the subscription, one deliberate <code>az provider register</code> by the platform owner. Needed for the <code>snet-func</code> delegation and Flex Consumption.</li>
+<li><code>policy-lab</code> destroyed, after a <code>git grep</code> showed nothing outside it referenced its names. The code stays, because chapter 2.1 teaches from it. From now on its plan shows "3 to add". Never apply it.</li>
+</ul>
+
+<h3>Evidence</h3>
+<pre><code>Plan: 4 to add, 0 to change, 0 to destroy.          (lab, PR #4)
+Apply complete! Resources: 4 added, 0 changed, 0 destroyed.
+
+peer-hub-to-integration-dev   Connected  FullyInSync  forwarded=False
+peer-integration-dev-to-hub   Connected  FullyInSync  forwarded=True
+peer-hub-to-spoke1            Connected  FullyInSync  (untouched)
+peer-hub-to-spoke2            Connected  FullyInSync  (untouched)
+Public IPs in rg-hubspoke-integration-dev-cac:  0
+lab state: 14 items, plan exit code 0
+
+Plan: 3 to add, 0 to change, 0 to destroy.          (governance, PR #5)
+Guardrail tests A, B, C denied; D allowed. governance state: 18 items</code></pre>
+
+<div class="interview"><span class="label">Interview line</span>
+<p>"A new landing zone is one map entry calling the spoke module, so the plan was predictable: four resources, all under that one key. I wrote the prediction down first and the apply refused to run unless the saved plan matched. The interesting part was the side effect. CI's read-only identity couldn't see the new resource group, so the next plan would have failed even though the code was right. And the new RG had no guardrails, so I moved its policy assignments ahead of the plan and tested them with three creates that should fail and one control that should pass."</p>
+</div>
+
 <!-- ============================================================ GOTCHAS -->
 <div class="chapno" id="gotchas">FIELD NOTES</div>
 <h2>Things that tripped me up</h2>
@@ -910,6 +1028,9 @@ PASS, 2026-11-06. No unplanned destroy, no drift, no missing state, no stale loc
 <tr><td><code>gh api -X PATCH</code> with JSON piped in: no error, nothing changed</td><td>Windows PowerShell 5.1 piping a string into a native command</td><td>Pass fields with <code>-f "a[b][c]=value"</code>, then read the setting back</td></tr>
 <tr><td><code>az disk list</code>: "--resource-group is required"</td><td>A JMESPath <code>join(' | ', ...)</code> query mangled by az.cmd</td><td>Use a simple <code>{Name:name, ...}</code> projection with <code>-o table</code></td></tr>
 <tr><td>"Only azurerm is configured, so what are these providers?"</td><td>Terraform providers and Azure resource providers are different things</td><td><code>az provider show --namespace &lt;name&gt;</code> reads the subscription switch. See 7.0.</td></tr>
+<tr><td>Script said "already present" for a role that was never granted; a list printed <code>System.Object[]</code></td><td>Windows PowerShell 5.1 <code>ConvertFrom-Json</code> hands back an array as one object: an empty list counts as 1, and a loop gets the whole list at once</td><td>Count <code>-o tsv</code> lines, or read <code>-o table</code>. Never count <code>@(... | ConvertFrom-Json)</code></td></tr>
+<tr><td><code>az role assignment list</code>: read timed out on <code>graph.microsoft.com</code></td><td>az looks up principal names through Microsoft Graph. A passing network hiccup</td><td>Rerun. The <code>--all ... -o table</code> list gives the same answer</td></tr>
+<tr><td>Policy test said "DENIED by" with no rule name</td><td>az's error text shows the display name (<code>LZ - ...</code>), not the <code>lz-</code> assignment name the regex looked for</td><td>Match the display name. Each test breaks one rule, so the result still holds</td></tr>
 </table></div>
 
 <!-- ============================================================ STATE -->
@@ -918,23 +1039,22 @@ PASS, 2026-11-06. No unplanned destroy, no drift, no missing state, no stale loc
 <div class="table-wrap"><table>
 <tr><th>Root</th><th>Deployed</th><th>Notes</th></tr>
 <tr><td><code>terraform/bootstrap</code></td><td>1 RG, 1 storage account, 1 container, 1 role assignment</td><td>Phase 4. Local state, by design. Versioning on, shared keys off.</td></tr>
-<tr><td><code>envs/lab</code></td><td>3 RGs, 3 VNets, 4 peerings</td><td>Remote state (<code>lab.tfstate</code>). Spokes via <code>module.spoke</code> with <code>for_each</code> (3A). Spoke-side <code>allow_forwarded_traffic = true</code> (Stage 2).</td></tr>
+<tr><td><code>envs/lab</code></td><td>4 RGs, 4 VNets, 6 peerings</td><td>Remote state (<code>lab.tfstate</code>), 14 items. Spokes via <code>module.spoke</code> with <code>for_each</code> (3A): spoke1, spoke2, integration-dev (<code>10.63.0.0/22</code>, tagged <code>phase = "07"</code> through the per-spoke override). Spoke-side <code>allow_forwarded_traffic = true</code>.</td></tr>
 <tr><td><code>envs/probes</code></td><td>3 subnets, 3 NICs, 3 VMs, 2 UDRs</td><td>Local state. Hub NIC IP forwarding on. VMs deallocated to save cost.</td></tr>
 <tr><td>Hub VM guest OS</td><td><code>ip_forward = 1</code> persisted</td><td>iptables allow rules are lost on restart. Rerun <code>Enable-GuestForwarding.ps1</code> if pings fail. Configured is not the same as reproducibly configured: in production this belongs in cloud-init or config management.</td></tr>
-<tr><td><code>envs/policy-lab/governance</code></td><td>1 RG, 1 custom definition, 1 assignment</td><td>Phase 2.1 done. Costs nothing. Destroy any time.</td></tr>
-<tr><td><code>envs/policy-lab/workload</code></td><td>nothing (create was denied)</td><td>State holds only the data source.</td></tr>
-<tr><td><code>envs/governance</code></td><td>8 policy assignments</td><td>Remote state (<code>governance.tfstate</code>). Phase 2.2 done, 5/5 tests pass. Every future create or update in the hub-spoke RGs is now checked. Existing probes resources all comply.</td></tr>
-<tr><td>CI plan identity</td><td>App registration <code>gh-azure-landing-zone-lab-plan</code>, 1 federated credential, 4 roles</td><td><code>pull_request</code> subject only. No apply identity yet.</td></tr>
+<tr><td><code>envs/policy-lab/*</code></td><td>nothing (destroyed 2026-11-07)</td><td>Code kept for chapter 2.1. Plans show "3 to add" and "1 to add". Never apply.</td></tr>
+<tr><td><code>envs/governance</code></td><td>11 policy assignments on 4 RGs</td><td>Remote state (<code>governance.tfstate</code>), 18 items. Phase 2.2: 5/5 tests. Integration-dev network RG added 2026-11-07 (PR #5), 4/4 tests. Workload RG joins in 7.1C.</td></tr>
+<tr><td>CI plan identity</td><td>App registration <code>gh-azure-landing-zone-lab-plan</code>, 1 federated credential, 5 roles</td><td><code>pull_request</code> subject only. Reader on 4 RGs (integration-dev granted by hand in 7.1A, temporary) and Blob Data Contributor on <code>tfstate</code>. Replaced by UAMIs in 7.1C.</td></tr>
 <tr><td><code>.github/workflows/terraform-plan.yml</code></td><td>Plan on PR for lab and governance</td><td>No apply in CI. Apply is still local.</td></tr>
 <tr><td>Repo settings</td><td>Public. Secret scanning and push protection on (2026-11-06). Fork PRs need approval for all external contributors.</td><td>No branch ruleset yet; needed before 7.3.</td></tr>
-<tr><td>Subscription</td><td><code>Microsoft.App</code> NotRegistered</td><td>Register before 7.1B.</td></tr>
+<tr><td>Subscription</td><td><code>Microsoft.App</code> Registered (2026-11-07)</td><td>Platform-owner action, outside Terraform on purpose.</td></tr>
 </table></div>
 
-<p><strong>Next:</strong> Phase 7.1A, the <code>integration-dev</code> spoke (<code>10.63.0.0/22</code>), <code>envs/lab</code> only. Predicted plan: 4 to add, 0 to change, 0 to destroy. 3B is deferred past Phase 7.</p>
+<p><strong>Next:</strong> Phase 7.1B. Subnets, delegations and NSGs for integration-dev through a new optional <code>subnets</code> input on the spoke module (existing spokes must plan No changes), plus the seven private DNS zones in the hub RG and their VNet links. NSGs must carry <code>managed_by</code>. 3B is deferred past Phase 7.</p>
 <p><strong>To resume spoke-to-spoke testing:</strong> start the three VMs, rerun <code>Enable-GuestForwarding.ps1</code>, then <code>Test-Phase3Packets.ps1</code>.</p>
 <p><strong>To undo Phase 1.3:</strong> <code>Set-Phase3Stage.ps1 -Stage 0</code>, apply <code>probes</code> first, then <code>lab</code>.</p>
-<p><strong>To remove the guardrails:</strong> <code>terraform destroy</code> in <code>envs/governance</code>. It removes the 8 assignments only.</p>
-<p><strong>Destroy order for the whole lab:</strong> policy-lab workload, policy-lab governance, governance, then probes, then lab. Never destroy <code>lab</code> while <code>probes</code> still has subnets in its VNets. <code>terraform/bootstrap</code> goes last, after every root that keeps state in it.</p>
+<p><strong>To remove the guardrails:</strong> <code>terraform destroy</code> in <code>envs/governance</code>. It removes the 11 assignments only.</p>
+<p><strong>Destroy order for the whole lab:</strong> governance, then probes, then lab. Never destroy <code>lab</code> while <code>probes</code> still has subnets in its VNets. <code>terraform/bootstrap</code> goes last, after every root that keeps state in it.</p>
 
 <footer>Azure Landing Zone Lab journal. Built with ChatGPT and Claude, verified in a Visual Studio MSDN subscription, Canada Central.</footer>
 

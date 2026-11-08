@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Real Landing Zone vs This Lab</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+:root { --bg:#fbfaf7; --surface:#fff; --ink:#1d232b; --muted:#5b6573; --line:#dfe2e6; --accent:#0f62fe; --accent-soft:#e6eeff; --ok:#198038; --ok-soft:#e3f4e8; --warn:#8a5a00; --warn-soft:#fff4d6; --code:#f2f4f7; --plat:#e8f0e8; --lz:#e6eeff; --other:#f2f4f7; }
+@media (prefers-color-scheme: dark) { :root { --bg:#14171c; --surface:#1b1f26; --ink:#e6e9ee; --muted:#9aa4b2; --line:#2d333c; --accent:#78a9ff; --accent-soft:#1c2a45; --ok:#42be65; --ok-soft:#16301f; --warn:#f1c21b; --warn-soft:#3a3014; --code:#232831; --plat:#18301f; --lz:#1c2a45; --other:#232831; } }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:17px/1.6 "IBM Plex Sans", system-ui, sans-serif; }
+.wrap { max-width: 900px; margin: 0 auto; padding: 40px 16px 80px; }
+header { border-bottom: 2px solid var(--ink); padding-bottom: 18px; margin-bottom: 24px; }
+.kicker { font:13px "IBM Plex Mono", monospace; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+h1 { font-size: 34px; line-height:1.15; margin: 6px 0 8px; font-weight:600; }
+h2 { font-size: 24px; margin: 48px 0 8px; font-weight:600; }
+h3 { font-size: 18px; margin: 24px 0 6px; font-weight:600; }
+p { margin: 10px 0; }
+.lede { color: var(--muted); font-size: 18px; margin: 0; }
+.story { border-left:3px solid var(--accent); background:var(--accent-soft); padding:14px 18px; margin:16px 0 20px; font-style:italic; }
+.story p { margin: 6px 0; }
+code { font:14px "IBM Plex Mono", monospace; background:var(--code); padding:1px 5px; border-radius:3px; }
+.table-wrap { overflow-x:auto; margin: 12px 0; }
+table { border-collapse: collapse; width:100%; background:var(--surface); font-size:15px; }
+th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+th { font-weight:600; border-bottom:2px solid var(--line); }
+.callout { border:1px solid var(--line); border-left:4px solid var(--accent); border-radius:6px; padding:12px 16px; margin:16px 0; background:var(--surface); }
+.callout .label { font:12px "IBM Plex Mono", monospace; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); display:block; margin-bottom:4px; }
+.interview { border:1px dashed var(--accent); border-radius:6px; padding:12px 16px; margin:18px 0; }
+.interview .label { font:12px "IBM Plex Mono", monospace; text-transform:uppercase; letter-spacing:.06em; color:var(--accent); display:block; margin-bottom:4px; }
+figure { margin: 18px 0; }
+figure svg { width:100%; height:auto; display:block; }
+figcaption { font-size:14px; color:var(--muted); margin-top:6px; }
+svg .b { stroke: var(--ink); stroke-width:1.3; }
+svg .plat { fill: var(--plat); }
+svg .lz { fill: var(--lz); }
+svg .oth { fill: var(--other); }
+svg .top { fill: var(--surface); }
+svg .t { fill: var(--ink); font: 600 14px "IBM Plex Sans", sans-serif; }
+svg .s { fill: var(--muted); font: 12px "IBM Plex Mono", monospace; }
+svg .ln { stroke: var(--muted); stroke-width:1.3; fill:none; }
+.done { color: var(--ok); font-weight:600; }
+.later { color: var(--warn); font-weight:600; }
+footer { margin-top:50px; padding-top:14px; border-top:1px solid var(--line); color:var(--muted); font-size:14px; }
+@media (max-width:600px){ body{font-size:16px;} h1{font-size:28px;} table{font-size:14px;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">Azure Landing Zone Lab - reference</div>
+  <h1>A real landing zone, and how this lab stands in for it</h1>
+  <p class="lede">The CAF hierarchy from the tenant down, what each level is for, what the lab uses instead, and why. Written 2026-11-07, after 7.1A.</p>
+</header>
+
+<div class="story">
+<p>The interviewer says: "Walk me through your landing zone." You start with the hub resource group. They stop you. "Resource group? Where are your management groups? Which subscription is the hub in?"</p>
+<p>The lab is built in one MSDN subscription, so a lot of the real structure is played by resource groups. That's fine, as long as you can say what each piece stands for, and what you'd do differently with a real tenant. That's this page.</p>
+</div>
+
+<h2>1. How a real organization is laid out</h2>
+<p>One hierarchy, from the tenant down. Anything assigned at a level, Azure Policy or Azure RBAC, flows down to everything below it, and a child can't remove what a parent assigned.</p>
+
+<figure>
+<svg viewBox="0 0 880 520" role="img" aria-label="CAF management group hierarchy from tenant root down to subscriptions and resource groups">
+  <rect class="b top" x="320" y="10" width="240" height="46" rx="6"/>
+  <text class="t" x="440" y="31" text-anchor="middle">Tenant Root Group</text>
+  <text class="s" x="440" y="48" text-anchor="middle">Entra tenant, always there</text>
+  <line class="ln" x1="440" y1="56" x2="440" y2="80"/>
+  <rect class="b top" x="320" y="80" width="240" height="46" rx="6"/>
+  <text class="t" x="440" y="101" text-anchor="middle">Contoso (top MG)</text>
+  <text class="s" x="440" y="118" text-anchor="middle">regions, tags: everyone</text>
+  <line class="ln" x1="440" y1="126" x2="440" y2="146"/>
+  <line class="ln" x1="140" y1="146" x2="760" y2="146"/>
+  <line class="ln" x1="140" y1="146" x2="140" y2="166"/>
+  <line class="ln" x1="440" y1="146" x2="440" y2="166"/>
+  <line class="ln" x1="760" y1="146" x2="760" y2="166"/>
+  <rect class="b plat" x="30" y="166" width="220" height="46" rx="6"/>
+  <text class="t" x="140" y="187" text-anchor="middle">Platform MG</text>
+  <text class="s" x="140" y="204" text-anchor="middle">run by the platform team</text>
+  <rect class="b lz" x="330" y="166" width="220" height="46" rx="6"/>
+  <text class="t" x="440" y="187" text-anchor="middle">Landing Zones MG</text>
+  <text class="s" x="440" y="204" text-anchor="middle">run by app teams</text>
+  <rect class="b oth" x="650" y="166" width="220" height="46" rx="6"/>
+  <text class="t" x="760" y="187" text-anchor="middle">Sandbox, Decommissioned</text>
+  <text class="s" x="760" y="204" text-anchor="middle">play area, shutdown</text>
+  <line class="ln" x1="140" y1="212" x2="140" y2="232"/>
+  <line class="ln" x1="60" y1="232" x2="220" y2="232"/>
+  <line class="ln" x1="60" y1="232" x2="60" y2="252"/>
+  <line class="ln" x1="140" y1="232" x2="140" y2="252"/>
+  <line class="ln" x1="220" y1="232" x2="220" y2="252"/>
+  <rect class="b plat" x="10" y="252" width="100" height="40" rx="6"/>
+  <text class="t" x="60" y="277" text-anchor="middle">Connectivity</text>
+  <rect class="b plat" x="114" y="252" width="56" height="40" rx="6"/>
+  <text class="t" x="142" y="277" text-anchor="middle">Ident.</text>
+  <rect class="b plat" x="174" y="252" width="86" height="40" rx="6"/>
+  <text class="t" x="217" y="277" text-anchor="middle">Mgmt</text>
+  <line class="ln" x1="440" y1="212" x2="440" y2="232"/>
+  <line class="ln" x1="385" y1="232" x2="495" y2="232"/>
+  <line class="ln" x1="385" y1="232" x2="385" y2="252"/>
+  <line class="ln" x1="495" y1="232" x2="495" y2="252"/>
+  <rect class="b lz" x="335" y="252" width="100" height="40" rx="6"/>
+  <text class="t" x="385" y="277" text-anchor="middle">Corp</text>
+  <rect class="b lz" x="445" y="252" width="100" height="40" rx="6"/>
+  <text class="t" x="495" y="277" text-anchor="middle">Online</text>
+  <line class="ln" x1="60" y1="292" x2="60" y2="322"/>
+  <rect class="b top" x="5" y="322" width="250" height="52" rx="6"/>
+  <text class="t" x="130" y="344" text-anchor="middle">hub subscription</text>
+  <text class="s" x="130" y="362" text-anchor="middle">hub VNet, firewall, DNS zones</text>
+  <line class="ln" x1="385" y1="292" x2="385" y2="322"/>
+  <rect class="b top" x="290" y="322" width="290" height="52" rx="6"/>
+  <text class="t" x="435" y="344" text-anchor="middle">integration-dev subscription</text>
+  <text class="s" x="435" y="362" text-anchor="middle">one per landing zone</text>
+  <line class="ln" x1="435" y1="374" x2="435" y2="396"/>
+  <line class="ln" x1="340" y1="396" x2="530" y2="396"/>
+  <line class="ln" x1="340" y1="396" x2="340" y2="414"/>
+  <line class="ln" x1="530" y1="396" x2="530" y2="414"/>
+  <rect class="b top" x="250" y="414" width="180" height="52" rx="6"/>
+  <text class="t" x="340" y="436" text-anchor="middle">network RG</text>
+  <text class="s" x="340" y="454" text-anchor="middle">VNet, subnets, NSGs</text>
+  <rect class="b top" x="440" y="414" width="180" height="52" rx="6"/>
+  <text class="t" x="530" y="436" text-anchor="middle">workload RG</text>
+  <text class="s" x="530" y="454" text-anchor="middle">APIM, Logic App, PEs</text>
+  <text class="s" x="10" y="505">Green: Platform branch. Blue: Landing Zones branch. Rules flow down each branch only.</text>
+</svg>
+<figcaption>The hub and the app landing zones sit in different branches. That's how Corp's "no public IPs" rule never reaches the hub.</figcaption>
+</figure>
+
+<div class="table-wrap"><table>
+<tr><th>Level</th><th>What it is for</th><th>Typical assignments</th></tr>
+<tr><td>Tenant (Entra ID)</td><td>The identity directory: users, groups, apps, service principals. Everything hangs off it</td><td>Conditional Access, PIM</td></tr>
+<tr><td>Top management group</td><td>Company-wide rules</td><td>Allowed regions, required tags, Defender for Cloud on</td></tr>
+<tr><td>Platform, then Connectivity / Identity / Management</td><td>Shared services run by the platform team</td><td>Connectivity may have public IPs (it's the internet edge). Management holds Log Analytics</td></tr>
+<tr><td>Landing Zones, then Corp / Online</td><td>Where app teams live. Corp is internal, peered to the hub. Online is internet-facing</td><td>Corp: no public IPs, private endpoints only, diagnostics to Log Analytics</td></tr>
+<tr><td>Subscription</td><td>One landing zone: billing, quota and blast-radius boundary</td><td>Budgets, the app team's RBAC</td></tr>
+<tr><td>Resource group</td><td>Lifecycle and ownership folder inside a subscription</td><td>Rarely policy. Sometimes an exemption</td></tr>
+</table></div>
+
+<div class="callout"><span class="label">Two hierarchies, not one</span>
+The resource hierarchy above decides <strong>governance</strong>. Billing is a separate tree (billing account, billing profile, invoice section, subscription) that decides <strong>who pays</strong>. A subscription sits in both. Management groups aren't only for policy: RBAC and cost views flow down them too.
+</div>
+
+<h2>2. The lab, level by level</h2>
+<p>Everything below runs in one MSDN subscription, <code>ce88c049...</code>, in Canada Central. Resource groups and separate Terraform roots play the parts that subscriptions and teams play in a real tenant.</p>
+
+<div class="table-wrap"><table>
+<tr><th>Real organization</th><th>This lab</th><th>Why the lab differs</th></tr>
+<tr><td>Management group tree</td><td>None. Only the Tenant Root Group, with the subscription directly under it</td><td>One subscription, shared with other labs. A management group Deny would hit all of them</td></tr>
+<tr><td>Policy initiatives at the Corp management group</td><td>Three built-in policies, assigned per RG with <code>for_each</code> in <code>envs/governance</code></td><td>RG scope is the only scope that stays inside this lab</td></tr>
+<tr><td>Hub exempt by living in the Connectivity branch</td><td><code>if k != "hub"</code> filter on the public IP rule</td><td>No branches to put it in, so the exemption is in code</td></tr>
+<tr><td>Connectivity subscription</td><td><code>rg-hubspoke-hub-cac</code>, root <code>envs/lab</code></td><td>RG stands in for the subscription</td></tr>
+<tr><td>One subscription per landing zone</td><td>One RG per spoke: <code>rg-hubspoke-spoke1-cac</code>, <code>-spoke2-</code>, <code>-integration-dev-</code></td><td>Same reason</td></tr>
+<tr><td>Network RG and workload RG inside the landing zone subscription</td><td>Network RG today. Workload RG <code>rg-intdev-workload-cac</code> in 7.1C</td><td>Matches the real pattern</td></tr>
+<tr><td>Subscription vending</td><td>One map entry calling <code>modules/spoke-network</code></td><td>Same idea, a smaller unit</td></tr>
+<tr><td>Hub firewall with UDRs</td><td>A Linux VM router (1.3), deallocated. No firewall</td><td>Cost. Firewall is a later phase</td></tr>
+<tr><td>Private DNS zones in the connectivity subscription, plus DNS Private Resolver</td><td>Seven zones in the hub RG, linked to the VNets (7.1B). No resolver</td><td>No on-premises network to serve</td></tr>
+<tr><td>Identity subscription (domain controllers)</td><td>None</td><td>Entra only, no hybrid identity</td></tr>
+<tr><td>Management subscription (Log Analytics)</td><td>None yet</td><td>Monitoring comes later</td></tr>
+<tr><td>Pipelines with managed identities, separate plan and apply</td><td>App registration, plan only. UAMIs in 7.1C, apply pipeline in 7.3</td><td>Built in steps, one complexity at a time</td></tr>
+<tr><td>Platform roots applied by the platform team, workload roots by pipeline</td><td>Same split: you apply platform roots locally. Workload pipeline in 7.3</td><td>Matches the real pattern</td></tr>
+<tr><td>Remote state per root, in platform-owned storage</td><td><code>sttfstatecacce88c0</code>, one blob per root, shared keys off</td><td>Matches</td></tr>
+<tr><td>Budgets per subscription</td><td>None for this lab yet</td><td>Set before APIM goes up</td></tr>
+</table></div>
+
+<h2>3. What we built, and which part of CAF it answers</h2>
+<div class="table-wrap"><table>
+<tr><th>Lab step</th><th>What</th><th>CAF area</th><th>Status</th></tr>
+<tr><td>1.1 to 1.3</td><td>Hub, two spokes, peering, routing, a router in the hub</td><td>Connectivity: network topology</td><td class="done">done</td></tr>
+<tr><td>2.0</td><td>Scopes, management groups, the CAF tree</td><td>Resource organization</td><td class="done">concepts</td></tr>
+<tr><td>2.1, 2.2</td><td>Policy deny in isolation, then three guardrails on the landing zone</td><td>Governance</td><td class="done">done</td></tr>
+<tr><td>4.0</td><td>Remote state, OIDC, plan on PR</td><td>Platform automation and DevOps</td><td class="done">done</td></tr>
+<tr><td>3A</td><td>Spoke module with <code>for_each</code></td><td>Subscription vending, in miniature</td><td class="done">done</td></tr>
+<tr><td>7.0</td><td>Baseline, backups, public-repo safety</td><td>Operations: change safety</td><td class="done">done</td></tr>
+<tr><td>7.1A</td><td>Integration-dev spoke, plus guardrails on its RG</td><td>A new Corp landing zone</td><td class="done">done</td></tr>
+<tr><td>7.1B</td><td>Subnets, delegations, NSGs, private DNS zones</td><td>Connectivity: the platform/workload network contract</td><td class="later">next</td></tr>
+<tr><td>7.1C</td><td>Managed identities for CI, workload RG, Subnet Join role</td><td>Identity and access, platform automation</td><td class="later">later</td></tr>
+<tr><td>7.2 to 7.5</td><td>Key Vault, storage, private endpoints, pipeline, Service Bus, Logic App, Function, APIM</td><td>The workload in the landing zone</td><td class="later">later</td></tr>
+</table></div>
+
+<h2>4. The decisions, and why</h2>
+<h3>Why resource groups instead of management groups</h3>
+<p>One subscription can only sit in one management group, and this one holds your other labs too. A management group Deny would reach them all. And the real point of the tree, putting the hub and the landing zones in different branches, needs at least two subscriptions. RG scope keeps every rule inside the lab.</p>
+
+<h3>Why the hub owns the DNS zones</h3>
+<p>One <code>privatelink.*</code> zone per service, shared by every spoke. A VNet can link only one zone of a given name, so per-spoke copies would leave each VNet seeing half the records.</p>
+
+<h3>Why two RGs per landing zone</h3>
+<p>An RG is a lifecycle and access boundary. The network (VNet, subnets, NSGs) belongs to platform, and the services belong to the team. A subnet must live with its VNet. A private endpoint lives and dies with its service, so it goes with the service.</p>
+
+<h3>Why platform provisions the subnets</h3>
+<p>The workload only needs to <em>join</em> a subnet. Network Contributor on the VNet would also let it change the peering. So platform creates subnets to the team's requirements, and the workload gets a join-only custom role.</p>
+
+<h3>Why guardrails moved ahead of 7.1C</h3>
+<p>From the moment 7.1A created the RG, it had no rules, and 7.1B was about to create NSGs in it. In a real tenant this gap never opens: a new subscription under Corp inherits the rules the instant it lands.</p>
+
+<h2>5. If this were a real tenant</h2>
+<p>Three changes, in order.</p>
+<div class="table-wrap"><table>
+<tr><th>Change</th><th>What it buys</th></tr>
+<tr><td>Build the management group tree: Contoso, Platform and Connectivity, Landing Zones and Corp</td><td>Rules are inherited instead of assigned per RG. New landing zones are governed the second they land</td></tr>
+<tr><td>Separate subscriptions: one for the hub, one per landing zone</td><td>Real billing, quota and blast-radius boundaries. The hub exemption comes from its branch, not from a filter in code</td></tr>
+<tr><td>Assign one initiative at Corp instead of three policies per RG</td><td>One assignment to manage. Adding a rule changes every landing zone at once</td></tr>
+</table></div>
+<p>A safe way to practice the first one in this subscription: build the tree empty, move the subscription under Corp, and assign policies there in Audit mode. Audit only reports, so your other labs keep working while you watch inheritance in the Compliance view.</p>
+
+<div class="interview"><span class="label">Interview line</span>
+<p>"In a real tenant I'd follow the CAF tree: Platform with Connectivity, Identity and Management, and Landing Zones with Corp and Online, one subscription per landing zone, and policy initiatives assigned at the management groups so new subscriptions inherit them. My lab runs in a single shared subscription, so resource groups stand in for subscriptions and policies are assigned per RG, with the hub exempt in code instead of by branch. The ownership model is the same: platform owns the hub, the shared DNS zones, the spoke networks and the guardrails; the integration team owns its workload RG and deploys it through its own pipeline."</p>
+</div>
+
+<footer>Azure Landing Zone Lab. See <code>lab-journal.html</code> for the story of each step, and <code>phase-7-plan.md</code> for the Phase 7 decisions.</footer>
+</div>
+</body>
+</html>
