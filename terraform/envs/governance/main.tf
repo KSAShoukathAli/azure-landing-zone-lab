@@ -22,6 +22,8 @@ locals {
     hub    = "rg-hubspoke-hub-cac"
     spoke1 = "rg-hubspoke-spoke1-cac"
     spoke2 = "rg-hubspoke-spoke2-cac"
+    # Phase 7.1A. Network RG for the integration-dev landing zone.
+    "integration-dev" = "rg-hubspoke-integration-dev-cac"
   }
 
   allowed_locations = ["canadacentral"]
