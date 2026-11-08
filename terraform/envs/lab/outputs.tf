@@ -13,3 +13,8 @@ output "peering_names" {
     { for k, m in module.spoke : "${k}_to_hub" => m.peering_names.spoke_to_hub }
   )
 }
+
+output "subnet_ids" {
+  description = "Platform-built subnets, per spoke that has any."
+  value       = { for k, m in module.spoke : k => m.subnet_ids if length(m.subnet_ids) > 0 }
+}

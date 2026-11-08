@@ -38,3 +38,21 @@ variable "allow_forwarded_traffic" {
   type        = bool
   default     = true
 }
+
+variable "subnets" {
+  description = "Optional subnets for this spoke, built by platform to the team's request. Key = short name; the subnet is snet-<key>, the NSG nsg-<spoke>-<key>-<region>."
+  type = map(object({
+    address_prefix                    = string
+    delegation                        = optional(string)
+    private_endpoint_network_policies = optional(string, "Disabled")
+  }))
+  default = {}
+
+  validation {
+    condition = alltrue([
+      for s in values(var.subnets) :
+      contains(["none", "Microsoft.Web/serverFarms", "Microsoft.App/environments"], coalesce(s.delegation, "none"))
+    ])
+    error_message = "delegation must be Microsoft.Web/serverFarms or Microsoft.App/environments (add new services to local.delegation_actions first)."
+  }
+}

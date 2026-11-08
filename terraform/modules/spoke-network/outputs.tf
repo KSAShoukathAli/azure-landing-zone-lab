@@ -20,3 +20,7 @@ output "peering_names" {
     spoke_to_hub = azurerm_virtual_network_peering.spoke_to_hub.name
   }
 }
+
+output "subnet_ids" {
+  value = { for k, s in azurerm_subnet.this : k => s.id }
+}
