@@ -18,3 +18,8 @@ output "subnet_ids" {
   description = "Platform-built subnets, per spoke that has any."
   value       = { for k, m in module.spoke : k => m.subnet_ids if length(m.subnet_ids) > 0 }
 }
+
+output "private_dns_zone_ids" {
+  description = "Private DNS zone IDs by zone name, for private endpoint DNS zone groups (7.2 onward)."
+  value       = { for k, z in azurerm_private_dns_zone.this : k => z.id }
+}
