@@ -2,7 +2,9 @@
 # It lives in bootstrap on purpose: bootstrap is applied by the platform owner,
 # so the pipeline never grants itself rights.
 locals {
-  github_repo = "KSAShoukathAli/azure-landing-zone-lab"
+  # GitHub's OIDC subject names the owner and repo with their numeric IDs:
+  # repo:<owner>@<owner_id>/<repo>@<repo_id>:...  Seen in the AADSTS700213 error on 2026-11-08.
+  github_subject_prefix = "repo:KSAShoukathAli@275120224/azure-landing-zone-lab@1443587946"
 
   # RGs the lab root owns. The apply identity gets Contributor here and nowhere else.
   lab_apply_rgs = {
@@ -27,7 +29,7 @@ resource "azurerm_federated_identity_credential" "gh_lab_apply" {
   user_assigned_identity_id = azurerm_user_assigned_identity.gh_lab_apply.id
   audience                  = ["api://AzureADTokenExchange"]
   issuer                    = "https://token.actions.githubusercontent.com"
-  subject                   = "repo:${local.github_repo}:environment:lab-apply"
+  subject                   = "${local.github_subject_prefix}:environment:lab-apply"
 }
 
 # Contributor on the lab RGs: can change resources, cannot assign roles or change policy.
