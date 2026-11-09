@@ -152,7 +152,7 @@ footer { margin-top: 60px; padding-top: 16px; border-top: 1px solid var(--line);
 <header class="top">
   <div class="kicker">Azure Landing Zone Lab - hands-on journal</div>
   <h1>Why the packet went where it went</h1>
-  <p class="lede">A chapter per lab session. What you built, what broke, and what Azure was actually doing underneath. Repo: <code>azure-landing-zone-lab</code>. Last updated 2026-11-07.</p>
+  <p class="lede">A chapter per lab session. What you built, what broke, and what Azure was actually doing underneath. Repo: <code>azure-landing-zone-lab</code>. Last updated 2026-11-08.</p>
 </header>
 
 <nav class="toc">
@@ -169,6 +169,9 @@ footer { margin-top: 60px; padding-top: 16px; border-top: 1px solid var(--line);
     <li><a href="#ch3a">3A - One module, many spokes</a> <span class="status done">done</span></li>
     <li><a href="#ch70">7.0 - A photo before the surgery</a> <span class="status done">done</span></li>
     <li><a href="#ch71a">7.1A - One map entry, one landing zone</a> <span class="status done">done</span></li>
+    <li><a href="#ch71b">7.1B - The platform builds the sockets</a> <span class="status done">done</span></li>
+    <li><a href="#chpipe">Pipeline - Merge, approve, apply</a> <span class="status done">done</span></li>
+    <li><a href="#chdns">7.1B DNS - Seven zones, fourteen links</a> <span class="status done">done</span></li>
     <li><a href="#gotchas">Things that tripped me up</a></li>
     <li><a href="#state">Where the lab stands right now</a></li>
   </ol>
@@ -996,6 +999,269 @@ Guardrail tests A, B, C denied; D allowed. governance state: 18 items</code></pr
 <p>"A new landing zone is one map entry calling the spoke module, so the plan was predictable: four resources, all under that one key. I wrote the prediction down first and the apply refused to run unless the saved plan matched. The interesting part was the side effect. CI's read-only identity couldn't see the new resource group, so the next plan would have failed even though the code was right. And the new RG had no guardrails, so I moved its policy assignments ahead of the plan and tested them with three creates that should fail and one control that should pass."</p>
 </div>
 
+<!-- ============================================================ CH 7.1B -->
+<div class="chapno" id="ch71b">CHAPTER 7.1B</div>
+<h2>The platform builds the sockets <span class="status done">done</span></h2>
+
+<div class="story">
+<p>The integration team's Logic App needs to reach Key Vault without touching the internet. To do that, it has to put a network card inside your VNet. So the team asks: can we have a subnet?</p>
+<p>If you hand them Network Contributor on the VNet, they can make their own subnet. They can also resize yours, detach an NSG, or delete the peering to the hub. You'd be giving them a socket and the whole fuse box with it.</p>
+</div>
+
+<p>7.1B answers that the way real platform teams do. The platform builds the subnets to the team's spec, one NSG each, and the team only plugs in. Nothing runs in them yet. They're sockets waiting for 7.2 to 7.5.</p>
+
+<h3>What got built</h3>
+<p>One new optional input on the spoke module, <code>subnets</code>, and four entries for integration-dev. Each entry becomes a subnet, an NSG and the link between them. 12 resources.</p>
+<pre><code>"integration-dev" = {
+  address_space = ["10.63.0.0/22"]
+  tags          = { phase = "07" }
+  subnets = {
+    apim  = { address_prefix = "10.63.0.0/27",   delegation = "Microsoft.Web/serverFarms" }
+    logic = { address_prefix = "10.63.0.64/26",  delegation = "Microsoft.Web/serverFarms" }
+    func  = { address_prefix = "10.63.0.128/26", delegation = "Microsoft.App/environments" }
+    pe    = { address_prefix = "10.63.1.0/25",   private_endpoint_network_policies = "Enabled" }
+  }
+}</code></pre>
+<p>spoke1 and spoke2 pass nothing, get <code>{}</code>, and plan at No changes. Same trick as the per-spoke tags in 7.1A.</p>
+
+<div class="table-wrap"><table>
+<tr><th>Subnet</th><th>For</th><th>Size, and the rule behind it</th></tr>
+<tr><td><code>snet-apim</code></td><td>APIM Standard v2 outbound</td><td>/27, the minimum. Microsoft recommends up to /24 for scale. An NSG is required.</td></tr>
+<tr><td><code>snet-logic</code></td><td>Logic App Standard outbound</td><td>/26, the recommended size for App Service integration (/28 is the minimum)</td></tr>
+<tr><td><code>snet-func</code></td><td>Flex Consumption Functions outbound</td><td>/26. Different delegation, and no underscore allowed in the name</td></tr>
+<tr><td><code>snet-pe</code></td><td>Private endpoints</td><td>/25, no delegation</td></tr>
+</table></div>
+
+<h3>What delegation means</h3>
+<p>A delegated subnet is handed to one Azure service. The service can drop its own network cards into it whenever it scales. You keep owning the address range, but you can't put anything else there. That's why APIM and the Logic App each get their own subnet even though both use <code>Microsoft.Web/serverFarms</code>. And Flex Functions can't share with either. Its delegation is <code>Microsoft.App/environments</code>, the one <code>Microsoft.App</code> had to be registered for in 7.1A.</p>
+<p>These three subnets carry outbound traffic only. The app calls out through them. Anything calling <em>in</em> to the app arrives through a private endpoint in <code>snet-pe</code>.</p>
+
+<h3>The trap that would have shown up every night</h3>
+<p>Each delegation carries a list of actions, and Azure fills it in if you leave it out. The azurerm provider doesn't read it back the same way. So a delegation written without actions would plan "1 to change" on every run, forever. And the nightly drift check would cry wolf every night.</p>
+<p>The module states them, and the change script checks them against Azure's own list before writing a single file:</p>
+<pre><code>delegation_actions = {
+  "Microsoft.Web/serverFarms"  = ["Microsoft.Network/virtualNetworks/subnets/action"]
+  "Microsoft.App/environments" = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
+}</code></pre>
+<p>Both matched. The re-plan after apply came back clean, which is the real proof.</p>
+
+<h3>The NSG and the tag you already knew about</h3>
+<p>Chapter 7.1A ended with a carry-forward: anything created in this RG must carry <code>managed_by</code>, or the require-tag Deny fires. The NSGs get the module's tags. Subnets don't need them, because subnets can't hold tags and the policy skips them.</p>
+<p><code>snet-pe</code> sets private endpoint network policies to <code>Enabled</code>. Without that, NSG rules don't apply to private endpoint traffic at all. With it, the team's NSG can actually filter who reaches their Key Vault.</p>
+
+<h3>The five questions, short</h3>
+<div class="table-wrap"><table>
+<tr><th>Question</th><th>Delegated subnets</th><th>NSGs</th></tr>
+<tr><td>Why?</td><td>The services need a network card inside your VNet to reach private backends</td><td>APIM v2 requires one, and every subnet gets one so rules can be added later</td></tr>
+<tr><td>Rejected</td><td>One shared subnet, team-built subnets, /24s</td><td>One shared NSG for all four, no NSG</td></tr>
+<tr><td>Interaction</td><td>App calls out through the subnet to a private endpoint IP</td><td>Default rules only for now</td></tr>
+<tr><td>Failure</td><td>Wrong delegation: "subnet not valid for integration". Full subnet: scale-out stalls</td><td>Missing tag: 403 naming "LZ - require tag"</td></tr>
+<tr><td>Owner</td><td>Platform builds, team joins</td><td>Platform owns, team asks for rules by PR</td></tr>
+</table></div>
+
+<h3>Run it, and the guard that worked</h3>
+<p>The prediction: 12 to add, all under <code>module.spoke["integration-dev"]</code>. Local plan matched, CI on PR #8 matched. Then the apply script stopped with "saved plan does not match the prediction."</p>
+<p>Nothing was wrong with the code. PR #8 wasn't merged yet, so main had nothing to apply. The plan came back empty, the guard compared it with "12 to add" and refused. Merge, pull, run it again: 12 added, re-plan exit 0, 26 items in state.</p>
+<div class="callout key"><span class="label">Why apply from main</span>
+Main is the record of what should be in Azure. A branch is a proposal. Applying from main means what's deployed is exactly what was reviewed and merged, never something that only lived on your laptop.
+</div>
+
+<h3>Evidence</h3>
+<pre><code>Plan: 12 to add, 0 to change, 0 to destroy.        (lab, PR #8)
+Apply complete! Resources: 12 added, 0 changed, 0 destroyed.
+
+snet-pe     10.63.1.0/25    PE policies Enabled
+snet-func   10.63.0.128/26  Microsoft.App/environments
+snet-logic  10.63.0.64/26   Microsoft.Web/serverFarms
+snet-apim   10.63.0.0/27    Microsoft.Web/serverFarms
+nsg-integration-dev-*-cac   managed_by=terraform  phase=07  rules=0   (x4)
+Verify: 22 pass, 0 fail. Peerings still Connected.</code></pre>
+
+<div class="interview"><span class="label">Interview line</span>
+<p>"The platform team builds subnets to the workload team's spec, through an optional subnets input on the spoke module, so existing spokes plan No changes. Each subnet gets its own NSG, tagged to pass the landing zone's tag policy. APIM v2, Logic App Standard and Flex Functions each get a delegated subnet, because a delegated subnet belongs to one service, and private endpoints get their own with network policies on so NSGs apply to them. I state the delegation actions explicitly, otherwise the provider shows a change on every plan and drift detection becomes noise."</p>
+</div>
+
+<!-- ============================================================ CH PIPE -->
+<div class="chapno" id="chpipe">CHAPTER PIPELINE</div>
+<h2>Merge, approve, apply <span class="status done">done</span></h2>
+
+<div class="story">
+<p>You open a PR in the portal. CI plans it, you read the plan, you merge. Then you go back to PowerShell, pull main, run an apply script, type yes, run a verify script. Half the work is in the browser, half is in scripts, and you can't see what the scripts are doing unless you read them.</p>
+<p>"Why are we branching and merging through scripts? That's not how I work." Fair. So the second half moves into GitHub too.</p>
+</div>
+
+<p>This was planned for 7.3. It got pulled forward because the manual apply was the confusing part. Now, for the lab root, the whole loop happens in the GitHub portal and you can watch every step.</p>
+
+<h3>The two halves</h3>
+<pre><code>open PR  --&gt; terraform-plan:  plan, upload plan, summary         (review proof)
+merge    --&gt; terraform-apply: plan on main, upload saved plan
+         --&gt; waits for you:   "Review pending deployments"
+         --&gt; apply that exact file, then re-plan must be clean</code></pre>
+<p>The plan you approve is not the one from the PR. It's a fresh plan made on main after the merge.</p>
+<p>Why? Two PRs, A and B. You open both, B merges first. A's plan was made before B existed. Apply it and you could undo B, or fail halfway. A plan made on main after the merge always starts from what's really there. Terraform also refuses a saved plan if the state moved since it was made, so a stale plan can't sneak through.</p>
+
+<h3>Two keys, two doors</h3>
+<div class="table-wrap"><table>
+<tr><th>Job</th><th>Identity</th><th>Can do</th><th>Trusted for subject</th></tr>
+<tr><td>PR plan, main plan</td><td>App registration (plan)</td><td>Reader on 4 lab RGs, read and lock state</td><td><code>:pull_request</code>, <code>:ref:refs/heads/main</code></td></tr>
+<tr><td>Apply</td><td><code>id-gh-lab-apply-cac</code>, a managed identity</td><td>Contributor on 4 lab RGs, read and write state. Nothing at subscription scope</td><td><code>:environment:lab-apply</code> only</td></tr>
+</table></div>
+<p>The apply identity lives in <code>terraform/bootstrap</code>. You apply bootstrap yourself, so the pipeline can never give itself more rights. Contributor can change resources but can't assign roles or change policy, so it can't touch the guardrails either.</p>
+<p>Its trust is the important part. Only a job running inside the GitHub environment <code>lab-apply</code> can get its token. A PR branch can't. A plain push to main can't. And <code>lab-apply</code> has you as its required reviewer. No approval, no token, no write.</p>
+
+<div class="callout key"><span class="label">The approval is the token</span>
+The Approve button isn't a courtesy pause in a script. GitHub only issues the token that matches the apply identity's trust after the environment's protection rule passes. Until you click, the job has no way to write to Azure at all.
+</div>
+
+<h3>The ruleset, and why 0 approvals</h3>
+<p><code>main-protection</code> on the default branch: no deletions, no force pushes, a PR for every change, and <code>plan (lab)</code> and <code>plan (governance)</code> must pass. The PR workflow lost its paths filter for this. A required check that never runs leaves a docs-only PR waiting forever.</p>
+<p>Required approvals is 0, not 1. GitHub never lets the author approve their own PR, and you're the only person in the repo. With 1, nothing could ever merge. So in this lab the human check sits at deploy time, in <code>lab-apply</code>. In a team you'd require one review from CODEOWNERS on top.</p>
+
+<h3>What broke: the name that wasn't the name</h3>
+<p>Everything deployed. Then the first test run, Actions, Run workflow, failed in 7 seconds:</p>
+<pre><code>AADSTS700213: No matching federated identity record found for presented
+assertion subject 'repo:KSAShoukathAli@275120224/azure-landing-zone-lab@1443587946:ref:refs/heads/main'</code></pre>
+<p>Chapter 4.0 already explains this. GitHub puts the owner and repo <em>IDs</em> in the subject for this repo. The two new credentials were written the old way, <code>repo:KSAShoukathAli/azure-landing-zone-lab:...</code>. Entra compares character by character, so no match, no login.</p>
+<p>The PR plans had always worked because the old <code>github-pull-request</code> credential used the ID format. The fix took two routes, matching how each thing is owned:</p>
+<div class="table-wrap"><table>
+<tr><th>Credential</th><th>Owned by</th><th>Fixed with</th></tr>
+<tr><td><code>github-main</code> on the plan app</td><td>Nobody's code (made by hand)</td><td><code>az ad app federated-credential update</code>, live at once</td></tr>
+<tr><td><code>github-env-lab-apply</code> on the apply identity</td><td>bootstrap</td><td>A PR (the first one under the new ruleset), then a local bootstrap apply. 1 changed in place</td></tr>
+</table></div>
+<p>The test run went green straight after the first fix. It only uses the plan job, and with nothing to change, the apply job is skipped and never asks for its token.</p>
+<div class="callout warn"><span class="label">The lesson</span>
+Copy a subject from a credential that already works, or from the error message. The error shows exactly what GitHub sent. The test run caught this before any real change needed it, which is the whole point of running one.
+</div>
+
+<h3>The five questions, short</h3>
+<div class="table-wrap"><table>
+<tr><th>Piece</th><th>Why</th><th>Rejected</th><th>Failure</th></tr>
+<tr><td>Apply identity</td><td>Writes only after approval</td><td>Write rights for the plan app, client secrets, subscription Contributor</td><td>Subject mismatch: AADSTS700213. Missing role: 403 in the apply log</td></tr>
+<tr><td><code>lab-apply</code> environment</td><td>A person reviews the main plan before anything changes</td><td>Auto-apply on merge, applying from the PR</td><td>Nobody approves: the run waits, nothing changes</td></tr>
+<tr><td>Saved plan</td><td>What you approve is what's applied</td><td>Re-planning inside the apply job</td><td>Stale plan refused. Run the workflow again</td></tr>
+<tr><td>Ruleset</td><td>Every change goes through a PR and a plan</td><td>Required approval of 1 in a solo repo</td><td>Check fails: merge blocked</td></tr>
+</table></div>
+<p>Owner for all four: the platform owner. The workflow files change through PRs like everything else.</p>
+
+<h3>Evidence</h3>
+<pre><code>bootstrap: Plan: 7 to add  -&gt;  7 added, state 5 -&gt; 12, re-plan 0
+PR plan artifacts: plan-lab-prN, plan-governance-prN (Summary &gt; Artifacts)
+First test run: AADSTS700213 (subject format)  -&gt;  fixed, green, apply skipped
+Fix PR: 0 to add, 1 to change (subject, in place)
+Verify: 12 pass, 0 fail. 4 x Contributor + 1 x Blob Data Contributor, 0 at subscription scope.</code></pre>
+<p>Not yet proven at this point: Approve and apply for real. That came with the next PR.</p>
+
+<div class="interview"><span class="label">Interview line</span>
+<p>"Plan runs on every PR with a read-only identity and uploads the plan for review. After merge, the apply workflow plans again on main, because a PR plan can be stale, and uploads that saved plan. The apply job runs in a GitHub environment with a required reviewer, and the apply identity's federated credential trusts only that environment, so no approval means no token. The apply identity is a managed identity with Contributor on the landing zone RGs only, created by the platform's bootstrap root, so the pipeline can't grant itself rights. A ruleset makes PRs and passing plans mandatory on main."</p>
+</div>
+
+<!-- ============================================================ CH DNS -->
+<div class="chapno" id="chdns">CHAPTER 7.1B DNS</div>
+<h2>Seven zones, fourteen links <span class="status done">done</span></h2>
+
+<div class="story">
+<p>Picture 7.2. Key Vault gets a private endpoint at <code>10.63.1.4</code> and public access is switched off. The Logic App calls <code>kv-dev.vault.azure.net</code>, DNS hands back the public IP, and Key Vault refuses the connection. The private endpoint is there and working. Nobody told the Logic App its address.</p>
+</div>
+
+<p>A private endpoint gives you a private IP. DNS is what makes an app find that IP using the normal service name. You need both, and this chapter builds the DNS half before there's anything to resolve.</p>
+
+<h3>Four things that sound alike</h3>
+<div class="table-wrap"><table>
+<tr><th>Thing</th><th>Job</th><th>In this lab</th></tr>
+<tr><td>DNS server</td><td>Answers "what IP is this name?"</td><td>Azure's own, <code>168.63.129.16</code>. Nothing to build</td></tr>
+<tr><td>DNS zone</td><td>Stores the records it answers from</td><td>7 private zones in the hub RG</td></tr>
+<tr><td>VNet link</td><td>Decides which VNets see a zone</td><td>14 links: hub and integration-dev, each to all 7</td></tr>
+<tr><td>Private endpoint</td><td>Supplies the private IP, and Private Link carries the traffic</td><td>None yet. 7.2</td></tr>
+</table></div>
+<p>The server answers. The zone stores. The link decides who's allowed to ask. The private endpoint is the address being looked up.</p>
+
+<h3>Following one lookup</h3>
+<figure>
+<svg viewBox="0 0 840 230" role="img" aria-label="DNS lookup from Logic App to Azure DNS, CNAME to privatelink, linked zone returns private IP">
+  <rect class="box" x="10" y="80" width="160" height="64" rx="6"/>
+  <text class="t-b" x="90" y="108" text-anchor="middle">Logic App</text>
+  <text class="t-m" x="90" y="128" text-anchor="middle">integration-dev</text>
+  <rect class="box-accent" x="290" y="80" width="200" height="64" rx="6"/>
+  <text class="t-b" x="390" y="108" text-anchor="middle">Azure DNS</text>
+  <text class="t-m" x="390" y="128" text-anchor="middle">168.63.129.16</text>
+  <rect class="box" x="620" y="10" width="210" height="64" rx="6"/>
+  <text class="t-b" x="725" y="38" text-anchor="middle">Public DNS</text>
+  <text class="t-m" x="725" y="58" text-anchor="middle">CNAME to privatelink</text>
+  <rect class="box-accent" x="620" y="150" width="210" height="64" rx="6"/>
+  <text class="t-b" x="725" y="178" text-anchor="middle">Linked private zone</text>
+  <text class="t-m" x="725" y="198" text-anchor="middle">kv-dev A 10.63.1.4</text>
+  <line class="ln-acc" x1="170" y1="112" x2="290" y2="112"/>
+  <line class="ln-acc" x1="490" y1="100" x2="620" y2="45"/>
+  <line class="ln-acc" x1="490" y1="124" x2="620" y2="180"/>
+  <text class="t-acc" x="230" y="102" text-anchor="middle">1</text>
+  <text class="t-acc" x="555" y="62" text-anchor="middle">2</text>
+  <text class="t-acc" x="555" y="168" text-anchor="middle">3</text>
+</svg>
+<figcaption>1 ask for kv-dev.vault.azure.net. 2 public DNS says: that's kv-dev.privatelink.vaultcore.azure.net. 3 this VNet is linked to a zone with that name, so the private answer wins.</figcaption>
+</figure>
+<p>Only names that public DNS sends into <code>privatelink.*</code> are affected. A service only gets that CNAME once someone gives it a private endpoint. A plain public storage account never touches our zones.</p>
+
+<h3>Why seven, and why the hub</h3>
+<p>Each service has a fixed private zone name. You don't choose them. Storage alone needs four, because one account has four separate endpoints (blob, queue, table, file), and a Logic App Standard uses all four for its runtime.</p>
+<div class="table-wrap"><table>
+<tr><th>Zone</th><th>For</th></tr>
+<tr><td><code>privatelink.vaultcore.azure.net</code></td><td>Key Vault</td></tr>
+<tr><td><code>privatelink.blob</code> / <code>queue</code> / <code>table</code> / <code>file.core.windows.net</code></td><td>Storage, mostly the Logic App's own</td></tr>
+<tr><td><code>privatelink.azurewebsites.net</code></td><td>Logic App and Function inbound</td></tr>
+<tr><td><code>privatelink.azure-api.net</code></td><td>APIM v2 inbound</td></tr>
+</table></div>
+<p>No Service Bus zone. Service Bus stays Standard and public, and private endpoints need Premium.</p>
+<p>One copy of each zone, in the hub, owned by platform. A VNet can link only one zone of a given name. Give each spoke its own copy and some VNets see half the records.</p>
+
+<h3>Links, and the decisions behind them</h3>
+<p>A zone sitting in the hub RG doesn't serve the hub VNet. An RG is a management folder, not a DNS boundary. And peering carries packets, not DNS. Every VNet that needs the private answers gets its own link. That's 7 zones times 2 VNets, built with <code>setproduct</code> so a new VNet is one map entry.</p>
+<div class="table-wrap"><table>
+<tr><th>Decision</th><th>Why</th></tr>
+<tr><td>No links for spoke1/spoke2</td><td>Nothing there uses these services. Adding a link later is cheap</td></tr>
+<tr><td>Keep hub links</td><td>ChatGPT's review pointed out the hub has no DNS consumer today. Kept anyway: ready for a DNS Private Resolver or firewall DNS proxy in the hub, and the hub router can test lookups</td></tr>
+<tr><td><code>registration_enabled = false</code></td><td>VMs don't write records. Only private endpoints should</td></tr>
+<tr><td>Resolution policy <code>Default</code></td><td>See below</td></tr>
+</table></div>
+
+<h3>What happens when the record isn't there</h3>
+<p>Say someone gives <code>kv-other</code> a private endpoint, but its record isn't in our zone. From integration-dev, public DNS still sends the lookup into <code>privatelink.vaultcore.azure.net</code>, and our zone has nothing.</p>
+<div class="table-wrap"><table>
+<tr><th>Policy</th><th>Answer</th><th>What the app sees</th></tr>
+<tr><td><code>Default</code> (kept)</td><td>NXDOMAIN, name not found</td><td>A DNS error, right away, at the real cause</td></tr>
+<tr><td><code>NxDomainRedirect</code></td><td>Falls back to public DNS</td><td>A public IP, then "public access denied" from the service</td></tr>
+</table></div>
+<p>Your call was the simple one. Key Vault will have public access off. A fallback would only swap a clear DNS error for a confusing access error later. Redirect is for VNets that must reach other teams' or other companies' private-endpoint services that you'll never have records for.</p>
+
+<h3>The first change GitHub applied</h3>
+<p>No apply script this time. PR, plan with 21 to add, merge. Then the Actions tab: terraform-apply started on its own, planned 21 again on main, and stopped at a yellow banner, Review pending deployments. You approved <code>lab-apply</code>. The apply job ran as <code>id-gh-lab-apply-cac</code>, added 21, re-planned clean.</p>
+<p>The activity log on the hub RG shows who did it: caller <code>345bd586-...</code>, a service principal's object ID, not your user. That GUID is the apply identity. The pipeline made the change, with the key it was given, after the person it needed said yes.</p>
+
+<h3>The five questions, short</h3>
+<div class="table-wrap"><table>
+<tr><th>Question</th><th>Zones</th><th>Links</th></tr>
+<tr><td>Why?</td><td>Hold the private answer for each service name</td><td>A zone only answers for linked VNets</td></tr>
+<tr><td>Rejected</td><td>Zones per spoke, hosts files, custom DNS servers before there's on-prem</td><td>Auto-registration, linking every spoke</td></tr>
+<tr><td>Interaction</td><td>CNAME into privatelink, linked zone answers with the private endpoint IP</td><td>Affects name lookups only. Not a route, not a permission</td></tr>
+<tr><td>Failure</td><td>No record: NXDOMAIN. Find with <code>nslookup</code> inside the VNet</td><td>Link not Completed: that VNet gets the public answer</td></tr>
+<tr><td>Owner</td><td>Platform network. Private endpoints write their own A records</td><td>Platform. A new spoke gets its links in the same PR</td></tr>
+</table></div>
+
+<h3>Evidence</h3>
+<pre><code>Plan: 21 to add, 0 to change, 0 to destroy.     (PR, then again on main)
+Approved lab-apply  -&gt;  apply (lab): 21 added, re-plan clean. Lab state 47.
+
+Zone                                Records  Links  managed_by
+privatelink.vaultcore.azure.net     1        2      terraform     (x7, all the same)
+link-hub              Completed  auto-register False
+link-integration-dev  Completed  auto-register False
+Zone writes by 345bd586-5d18-49ca-a8de-19c87624a100 (apply identity)
+Verify: 43 pass, 0 fail</code></pre>
+<p>Each zone holds 1 record, its SOA. 21 resources created proves the DNS setup exists. It doesn't prove anything resolves privately. That proof is in 7.2: a Key Vault private endpoint, its A record appearing through a DNS zone group, and <code>nslookup</code> from a probe VM returning <code>10.63.1.x</code>. Whoever creates that endpoint needs rights to write the record into a hub zone, which goes on 7.1C's list.</p>
+
+<div class="interview"><span class="label">Interview line</span>
+<p>"Private DNS zones live once, in the connectivity hub, owned by platform, and each VNet that needs private answers gets its own link, because peering doesn't carry DNS. Public DNS CNAMEs the service name into privatelink, and Azure DNS answers from the linked zone with the private endpoint IP. I kept the default resolution policy so a missing record fails as NXDOMAIN at the real cause, instead of falling back to a public IP that the service then refuses. It was the first change our pipeline applied: plan on main, approval in a protected environment, and the activity log shows the apply identity as the caller, not me."</p>
+</div>
+
 <!-- ============================================================ GOTCHAS -->
 <div class="chapno" id="gotchas">FIELD NOTES</div>
 <h2>Things that tripped me up</h2>
@@ -1030,6 +1296,11 @@ Guardrail tests A, B, C denied; D allowed. governance state: 18 items</code></pr
 <tr><td>"Only azurerm is configured, so what are these providers?"</td><td>Terraform providers and Azure resource providers are different things</td><td><code>az provider show --namespace &lt;name&gt;</code> reads the subscription switch. See 7.0.</td></tr>
 <tr><td>Script said "already present" for a role that was never granted; a list printed <code>System.Object[]</code></td><td>Windows PowerShell 5.1 <code>ConvertFrom-Json</code> hands back an array as one object: an empty list counts as 1, and a loop gets the whole list at once</td><td>Count <code>-o tsv</code> lines, or read <code>-o table</code>. Never count <code>@(... | ConvertFrom-Json)</code></td></tr>
 <tr><td><code>az role assignment list</code>: read timed out on <code>graph.microsoft.com</code></td><td>az looks up principal names through Microsoft Graph. A passing network hiccup</td><td>Rerun. The <code>--all ... -o table</code> list gives the same answer</td></tr>
+<tr><td>Apply script stopped: "saved plan does not match the prediction", no <code>Plan:</code> line</td><td>Ran the apply before the PR was merged, so main had nothing to apply</td><td>Merge, <code>git pull</code> on main, then apply. The guard did its job</td></tr>
+<tr><td>terraform-apply plan job: AADSTS700213, no matching federated identity</td><td>New credentials written as <code>repo:owner/repo:...</code>. This repo's subject uses IDs: <code>repo:owner@id/repo@id:...</code></td><td>Copy the subject from a working credential or from the error. Fixed by hand (plan app) and in bootstrap (apply identity)</td></tr>
+<tr><td>Delegated subnet would plan "1 to change" on every run</td><td>Azure fills in delegation actions; the provider sees a difference if you leave them out</td><td>State the actions in code, and check them with <code>az network vnet subnet list-available-delegations</code></td></tr>
+<tr><td><code>git add</code>: "LF will be replaced by CRLF"</td><td>Scripts write LF, Git on Windows converts on checkout</td><td>Harmless. Terraform reads either</td></tr>
+<tr><td>Required approvals = 1 would block every merge</td><td>GitHub never lets the PR author approve their own PR</td><td>0 approvals in a solo repo; the human gate is the <code>lab-apply</code> environment</td></tr>
 <tr><td>Policy test said "DENIED by" with no rule name</td><td>az's error text shows the display name (<code>LZ - ...</code>), not the <code>lz-</code> assignment name the regex looked for</td><td>Match the display name. Each test breaks one rule, so the result still holds</td></tr>
 </table></div>
 
@@ -1038,19 +1309,20 @@ Guardrail tests A, B, C denied; D allowed. governance state: 18 items</code></pr
 <h2>Where the lab stands right now</h2>
 <div class="table-wrap"><table>
 <tr><th>Root</th><th>Deployed</th><th>Notes</th></tr>
-<tr><td><code>terraform/bootstrap</code></td><td>1 RG, 1 storage account, 1 container, 1 role assignment</td><td>Phase 4. Local state, by design. Versioning on, shared keys off.</td></tr>
-<tr><td><code>envs/lab</code></td><td>4 RGs, 4 VNets, 6 peerings</td><td>Remote state (<code>lab.tfstate</code>), 14 items. Spokes via <code>module.spoke</code> with <code>for_each</code> (3A): spoke1, spoke2, integration-dev (<code>10.63.0.0/22</code>, tagged <code>phase = "07"</code> through the per-spoke override). Spoke-side <code>allow_forwarded_traffic = true</code>.</td></tr>
+<tr><td><code>terraform/bootstrap</code></td><td>1 RG, 1 storage account, 1 container, apply identity <code>id-gh-lab-apply-cac</code> with 1 federated credential, 6 role assignments</td><td>Local state, by design, 12 items. Apply identity: Contributor on 4 lab RGs, Blob Data Contributor on <code>tfstate</code>, trusted only for <code>environment:lab-apply</code>.</td></tr>
+<tr><td><code>envs/lab</code></td><td>4 RGs, 4 VNets, 6 peerings, 4 subnets with 4 NSGs (integration-dev), 7 private DNS zones with 14 links (hub RG)</td><td>Remote state (<code>lab.tfstate</code>), 47 items. Applied by GitHub (terraform-apply, after approval) since 7.1B DNS. Spokes via <code>module.spoke</code> with <code>for_each</code> (3A): spoke1, spoke2, integration-dev (<code>10.63.0.0/22</code>, tagged <code>phase = "07"</code> through the per-spoke override). Spoke-side <code>allow_forwarded_traffic = true</code>.</td></tr>
 <tr><td><code>envs/probes</code></td><td>3 subnets, 3 NICs, 3 VMs, 2 UDRs</td><td>Local state. Hub NIC IP forwarding on. VMs deallocated to save cost.</td></tr>
 <tr><td>Hub VM guest OS</td><td><code>ip_forward = 1</code> persisted</td><td>iptables allow rules are lost on restart. Rerun <code>Enable-GuestForwarding.ps1</code> if pings fail. Configured is not the same as reproducibly configured: in production this belongs in cloud-init or config management.</td></tr>
 <tr><td><code>envs/policy-lab/*</code></td><td>nothing (destroyed 2026-11-07)</td><td>Code kept for chapter 2.1. Plans show "3 to add" and "1 to add". Never apply.</td></tr>
 <tr><td><code>envs/governance</code></td><td>11 policy assignments on 4 RGs</td><td>Remote state (<code>governance.tfstate</code>), 18 items. Phase 2.2: 5/5 tests. Integration-dev network RG added 2026-11-07 (PR #5), 4/4 tests. Workload RG joins in 7.1C.</td></tr>
-<tr><td>CI plan identity</td><td>App registration <code>gh-azure-landing-zone-lab-plan</code>, 1 federated credential, 5 roles</td><td><code>pull_request</code> subject only. Reader on 4 RGs (integration-dev granted by hand in 7.1A, temporary) and Blob Data Contributor on <code>tfstate</code>. Replaced by UAMIs in 7.1C.</td></tr>
-<tr><td><code>.github/workflows/terraform-plan.yml</code></td><td>Plan on PR for lab and governance</td><td>No apply in CI. Apply is still local.</td></tr>
-<tr><td>Repo settings</td><td>Public. Secret scanning and push protection on (2026-11-06). Fork PRs need approval for all external contributors.</td><td>No branch ruleset yet; needed before 7.3.</td></tr>
+<tr><td>CI plan identity</td><td>App registration <code>gh-azure-landing-zone-lab-plan</code>, 2 federated credentials, 5 roles</td><td><code>pull_request</code> and <code>ref:refs/heads/main</code> (added by hand). Reader on 4 RGs (integration-dev granted by hand in 7.1A) and Blob Data Contributor on <code>tfstate</code>. Replaced by a managed identity in 7.1C.</td></tr>
+<tr><td><code>.github/workflows/terraform-plan.yml</code></td><td>Plan on every PR for lab and governance, plan uploaded as an artifact</td><td>No paths filter (required checks).</td></tr>
+<tr><td><code>.github/workflows/terraform-apply.yml</code></td><td>Lab root: plan on main, approval in <code>lab-apply</code>, apply the saved plan, re-plan</td><td>Governance and bootstrap stay local, applied by the platform owner.</td></tr>
+<tr><td>Repo settings</td><td>Public. Secret scanning and push protection on. Fork PRs need approval. Ruleset <code>main-protection</code>: PR required (0 approvals), checks <code>plan (lab)</code> and <code>plan (governance)</code>, no force push or delete. Environment <code>lab-apply</code> with required reviewer.</td><td>Since 2026-11-08.</td></tr>
 <tr><td>Subscription</td><td><code>Microsoft.App</code> Registered (2026-11-07)</td><td>Platform-owner action, outside Terraform on purpose.</td></tr>
 </table></div>
 
-<p><strong>Next:</strong> Phase 7.1B. Subnets, delegations and NSGs for integration-dev through a new optional <code>subnets</code> input on the spoke module (existing spokes must plan No changes), plus the seven private DNS zones in the hub RG and their VNet links. NSGs must carry <code>managed_by</code>. 3B is deferred past Phase 7.</p>
+<p><strong>Next:</strong> Phase 7.1C. The integration team's workload RG, its own apply identity (Contributor on its RG, join-only on the subnets and DNS zones through a small custom role), guardrails on the workload RG, and the plan identity as a managed identity, retiring the hand-made app registration. 3B is deferred past Phase 7.</p>
 <p><strong>To resume spoke-to-spoke testing:</strong> start the three VMs, rerun <code>Enable-GuestForwarding.ps1</code>, then <code>Test-Phase3Packets.ps1</code>.</p>
 <p><strong>To undo Phase 1.3:</strong> <code>Set-Phase3Stage.ps1 -Stage 0</code>, apply <code>probes</code> first, then <code>lab</code>.</p>
 <p><strong>To remove the guardrails:</strong> <code>terraform destroy</code> in <code>envs/governance</code>. It removes the 11 assignments only.</p>
